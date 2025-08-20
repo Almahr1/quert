@@ -350,15 +350,15 @@ func (m *MockStorage) Store(content Content) error {
 #### Basic Project Files
 - [x] Create `Makefile` with build, test, and run targets
 - [x] Add `README.md` with project description and setup instructions
-- [ ] Create `docker-compose.yml` for local development dependencies
-- [ ] Set up `.env.example` file with required environment variables
-- [ ] Add `LICENSE` file (MIT or Apache 2.0)
-- [ ] Create GitHub Actions workflow file for CI/CD
+- [x] Create `docker-compose.yml` for local development dependencies
+- [x] Set up `.env.example` file with required environment variables
+- [x] Add `LICENSE` file (MIT or Apache 2.0)
+- [x] Create GitHub Actions workflow file for CI/CD
 
 #### Configuration System
-- [ ] Install Viper: `go get github.com/spf13/viper`
-- [ ] Create `config/config.go` with configuration struct
-- [ ] Add `config.yaml` with default settings
+- [x] Install Viper: `go get github.com/spf13/viper`
+- [x] Create `config/config.go` with configuration struct
+- [~] Add `config.yaml` with default settings
 - [ ] Implement configuration loading from file and environment
 - [ ] Add configuration validation function
 - [ ] Write unit tests for configuration loading

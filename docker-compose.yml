@@ -1,0 +1,254 @@
+version: '3.8'
+
+services:
+  # Networks for service communication
+networks:
+  crawler-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 Main crawler service
+  crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: crawler:latest
+    container_name: crawler-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"  # Metrics and health endpoints
+      - "6060:6060"  # pprof profiling (development only)
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      # Override default configuration via environment variables
+      - CRAWLER_MAX_PAGES=50000
+      - CRAWLER_CONCURRENT_WORKERS=10
+      - RATE_LIMIT_REQUESTS_PER_SECOND=2.0
+      - STORAGE_TYPE=postgres
+      - STORAGE_CONNECTION_STRING=postgresql://crawler:crawler_password@postgres:5432/crawler_db?sslmode=disable
+      - MONITORING_LOG_LEVEL=info
+      - MONITORING_METRICS_PORT=8080
+      - MONITORING_ENABLE_PROFILING=true
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - crawler-network
+
+  # PostgreSQL database for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: crawler-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: crawler_db
+      POSTGRES_USER: crawler
+      POSTGRES_PASSWORD: crawler_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawler -d crawler_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - crawler-network
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: crawler-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server 
+      --appendonly yes 
+      --maxmemory 512mb 
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - crawler-network
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: crawler-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - crawler-network
+
+  # Grafana for monitoring dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: crawler-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - crawler-network
+
+  # Jaeger for distributed tracing (development)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: crawler-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # HTTP collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - crawler-network
+    profiles:
+      - tracing
+
+  # MinIO for object storage (development)
+  minio:
+    image: minio/minio:latest
+    container_name: crawler-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"    # API
+      - "9001:9001"    # Console
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - crawler-network
+    profiles:
+      - object-storage
+
+  # Nginx reverse proxy and load balancer
+  nginx:
+    image: nginx:alpine
+    container_name: crawler-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - crawler
+    networks:
+      - crawler-network
+    profiles:
+      - proxy
+
+  # Development tools
+  adminer:
+    image: adminer:latest
+    container_name: crawler-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+      - ADMINER_DESIGN=galkaev
+    networks:
+      - crawler-network
+    profiles:
+      - dev-tools
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: crawler-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8082:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - crawler-network
+    profiles:
+      - dev-tools
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/postgres
+  
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/redis
+  
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/prometheus
+  
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/grafana
+  
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/minio
+
+#
