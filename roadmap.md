@@ -357,7 +357,7 @@ func (m *MockStorage) Store(content Content) error {
 #### Configuration System
 - [x] Install Viper: `go get github.com/spf13/viper`
 - [x] Create `config/config.go` with configuration struct
-- [~] Add `config.yaml` with default settings
+- [x] Add `config.yaml` with default settings
 - [ ] Implement configuration loading from file and environment
 - [ ] Add configuration validation function
 - [ ] Write unit tests for configuration loading
