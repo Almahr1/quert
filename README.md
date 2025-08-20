@@ -5,6 +5,11 @@ A high-performance, production-grade web crawler built in Go designed specifical
 [![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE)
 
+## Notice
+- **Project Status**:
+  The project is still in early development, much of the features spoken about here are 
+  conceptual and haven't been implemented yet. Bear with us.
+
 ## Features
 
 **Core Crawling Capabilities**
@@ -113,7 +118,7 @@ The crawler uses a flexible configuration system supporting YAML files, JSON, an
 
 ### Basic Configuration
 
-Create a `config.yaml` file:
+This is the provided `config.yaml` file:
 
 ```yaml
 # Basic crawler settings
@@ -469,21 +474,9 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 - [Prometheus](https://github.com/prometheus/client_golang) - Metrics collection
 - [zerolog](https://github.com/rs/zerolog) - Structured logging
 
-## Support
-
-- **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/crawler/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/crawler/discussions)
-- **Wiki**: [Project Wiki](https://github.com/yourusername/crawler/wiki)
-
 ## Roadmap
 
-- [ ] JavaScript rendering support
-- [ ] Distributed crawling capabilities
-- [ ] Machine learning quality scoring
-- [ ] Real-time streaming pipeline
-- [ ] Advanced content classification
-- [ ] Multi-language NLP processing
+- **Roadmap**: [Roadmap](https://github.com/Spunchkin/quert/blob/main/roadmap.md) 
 
 ---
 
