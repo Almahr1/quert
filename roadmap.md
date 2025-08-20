@@ -353,7 +353,6 @@ func (m *MockStorage) Store(content Content) error {
 - [x] Create `docker-compose.yml` for local development dependencies
 - [x] Set up `.env.example` file with required environment variables
 - [x] Add `LICENSE` file (MIT or Apache 2.0)
-- [x] Create GitHub Actions workflow file for CI/CD
 
 #### Configuration System
 - [x] Install Viper: `go get github.com/spf13/viper`
