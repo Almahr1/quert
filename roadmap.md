@@ -342,7 +342,7 @@ func (m *MockStorage) Store(content Content) error {
 #### Environment Setup
 - [x] Install Go 1.21+ and verify with `go version`
 - [x] Set up Git repository with `.gitignore` for Go projects
-- [x] Initialize Go module: `go mod init github.com/yourusername/crawler`
+- [x] Initialize Go module: `go mod init github.com/Almahr1/quert`
 - [x] Create project directory structure (cmd/, internal/, pkg/, test/)
 - [x] Set up IDE/editor with Go extensions and formatting tools
 - [x] Install development tools: `golangci-lint`, `air` for hot reload

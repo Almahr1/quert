@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Spunchkin/quert/internal/config"
+	"github.com/Almahr1/quert/internal/config"
 	"go.uber.org/zap"
 )
 

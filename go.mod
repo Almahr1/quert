@@ -1,4 +1,4 @@
-module github.com/Spunchkin/quert
+module github.com/Almahr1/quert
 
 go 1.21.0
 

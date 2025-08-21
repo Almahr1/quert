@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Spunchkin/quert/internal/config"
+	"github.com/Almahr1/quert/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

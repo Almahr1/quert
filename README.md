@@ -54,7 +54,7 @@ A high-performance, production-grade web crawler built in Go designed specifical
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/crawler.git
+git clone https://github.com/Almahr1/quert.git
 cd crawler
 
 # Install dependencies
@@ -86,10 +86,10 @@ ls -la ./data/
 
 ```bash
 # Install directly from source
-go install github.com/yourusername/crawler/cmd/crawler@latest
+go install github.com/Almahr1/quert/cmd/crawler@latest
 
 # Or clone and build
-git clone https://github.com/yourusername/crawler.git
+git clone https://github.com/Almahr1/quert.git
 cd crawler
 make build
 make install
@@ -110,7 +110,7 @@ make docker-compose-up
 
 ### Pre-built Binaries
 
-Download the latest release from the [releases page](https://github.com/yourusername/crawler/releases).
+Download the latest release from the [releases page](https://github.com/Almahr1/quert/releases).
 
 ## Configuration
 
@@ -205,8 +205,8 @@ import (
     "context"
     "log"
     
-    "github.com/yourusername/crawler/pkg/crawler"
-    "github.com/yourusername/crawler/pkg/config"
+    "github.com/Almahr1/quert/pkg/crawler"
+    "github.com/Almahr1/quert/pkg/config"
 )
 
 func main() {
@@ -279,7 +279,7 @@ func main() {
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/crawler.git
+git clone https://github.com/Almahr1/quert.git
 cd crawler
 
 # Install dependencies and tools
@@ -479,7 +479,7 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## Roadmap
 
-- **Roadmap**: [Roadmap](https://github.com/Spunchkin/quert/blob/main/roadmap.md) 
+- **Roadmap**: [Roadmap](https://github.com/Almahr1/quert/blob/main/roadmap.md) 
 
 ---
 
