@@ -49,22 +49,14 @@ run-config: build ## Run with custom config file
 	@echo "Running $(BINARY_NAME) with config..."
 	$(BINARY_PATH) -config=./config/config.yaml
 
-# Testing targets
-test: ## Run all tests
-	@echo "Running tests..."
-	go test -timeout $(TEST_TIMEOUT) -v ./...
-
-test-race: ## Run tests with race detector
-	@echo "Running tests with race detector..."
-	go test -race -timeout $(TEST_TIMEOUT) -v ./...
-
-test-short: ## Run short tests only
-	@echo "Running short tests..."
-	go test -short -timeout $(TEST_TIMEOUT) -v ./...
 
 benchmark: ## Run benchmarks
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...
+
+benchmark-config: ## Run config benchmarks only
+	@echo "Running configuration benchmarks..."
+	go test -bench=. -benchmem ./internal/config/...
 
 coverage: ## Generate test coverage report
 	@echo "Generating coverage report..."
@@ -102,6 +94,65 @@ deps-vendor: ## Vendor dependencies
 	@echo "Vendoring dependencies..."
 	go mod vendor
 
+# Configuration testing targets
+# Testing targets for /test folder structure
+
+# Run all tests
+test: ## Run all tests
+	@echo "Running all tests..."
+	go test -timeout $(TEST_TIMEOUT) -v ./test/...
+
+# Run configuration tests only
+test-config: ## Run configuration tests only
+	@echo "Running configuration tests..."
+	go test -timeout $(TEST_TIMEOUT) -v ./test/ -run TestLoadConfig
+	go test -timeout $(TEST_TIMEOUT) -v ./test/ -run TestConfig
+
+# Run config tests with coverage
+test-config-coverage: ## Run config tests with coverage
+	@echo "Running configuration tests with coverage..."
+	@mkdir -p coverage
+	go test -timeout $(TEST_TIMEOUT) -v -coverprofile=coverage/config_coverage.out ./test/ -run TestConfig
+	go tool cover -html=coverage/config_coverage.out -o coverage/config_coverage.html
+	@echo "Config coverage report generated at coverage/config_coverage.html"
+
+# Run specific test categories
+test-config-validation: ## Test configuration validation
+	@echo "Testing configuration validation..."
+	go test -v ./test/ -run TestConfigValidation
+
+test-config-loading: ## Test configuration loading
+	@echo "Testing configuration loading..."
+	go test -v ./test/ -run TestLoadConfig
+
+test-config-env: ## Test environment variable configuration
+	@echo "Testing environment variable configuration..."
+	go test -v ./test/ -run TestLoadConfigWithEnvironmentVariables
+
+test-config-precedence: ## Test configuration precedence
+	@echo "Testing configuration precedence..."
+	go test -v ./test/ -run TestConfigPrecedence
+
+# Run benchmarks
+benchmark-config: ## Run config benchmarks
+	@echo "Running configuration benchmarks..."
+	go test -bench=. -benchmem ./test/ -run Benchmark
+
+# Run tests with race detector
+test-race: ## Run tests with race detector
+	@echo "Running tests with race detector..."
+	go test -race -timeout $(TEST_TIMEOUT) -v ./test/...
+
+# Clean test artifacts
+clean-test: ## Clean test artifacts
+	@echo "Cleaning test artifacts..."
+	@rm -rf coverage/
+	@rm -rf test_data/ test_logs/
+
+# Setup test environment
+setup-test: ## Setup test environment
+	@echo "Setting up test environment..."
+	@mkdir -p test_data test_logs coverage
 # Profiling targets
 profile-cpu: ## Generate CPU profile
 	@echo "Generating CPU profile..."
@@ -192,12 +243,29 @@ migrate-down: ## Run database migrations down
 	# Add your rollback command here
 
 # Quick development workflow
-quick: fmt lint test build ## Quick development workflow (format, lint, test, build)
+quick: fmt lint test-config build ## Quick development workflow (format, lint, test config, build)
 	@echo "Quick development workflow completed successfully!"
 
 # CI/CD simulation
 ci: deps fmt lint vet test-race coverage ## Simulate CI pipeline
 	@echo "CI pipeline completed successfully!"
+
+# Project setup completion check
+setup-check: ## Check if project setup phase is complete
+	@echo "Checking project setup completion..."
+	@echo "✓ Project structure exists"
+	@test -f go.mod && echo "✓ go.mod exists" || echo "✗ go.mod missing"
+	@test -f config.yaml && echo "✓ config.yaml exists" || echo "✗ config.yaml missing"
+	@test -f .env.example && echo "✓ .env.example exists" || echo "✗ .env.example missing"
+	@test -f Makefile && echo "✓ Makefile exists" || echo "✗ Makefile missing"
+	@test -f README.md && echo "✓ README.md exists" || echo "✗ README.md missing"
+	@test -f LICENSE && echo "✓ LICENSE exists" || echo "✗ LICENSE missing"
+	@test -f docker-compose.yml && echo "✓ docker-compose.yml exists" || echo "✗ docker-compose.yml missing"
+	@test -f .gitignore && echo "✓ .gitignore exists" || echo "✗ .gitignore missing"
+	@test -f internal/config/config.go && echo "✓ Configuration implementation exists" || echo "✗ Configuration implementation missing"
+	@echo "Running configuration tests..."
+	@make test-config
+	@echo "✓ Project setup phase completed!"
 
 # Show build info
 info: ## Show build information

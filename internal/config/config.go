@@ -48,6 +48,9 @@ type Config struct {
 
 	// Feature flags
 	Features FeatureConfig `mapstructure:"features" yaml:"features" json:"features"`
+
+	// Internal metadata (not serialized)
+	configFileUsed string `json:"-" yaml:"-"`
 }
 
 // CrawlerConfig holds basic crawler settings
@@ -219,8 +222,15 @@ type FeatureConfig struct {
 func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 	v := viper.New()
 
-	// Set configuration file
+	// Set default values first
+	setDefaults(v)
+
+	// Set up configuration file paths
 	if configPath != "" {
+		// Check if the specified config file exists
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("specified config file does not exist: %s", configPath)
+		}
 		v.SetConfigFile(configPath)
 	} else {
 		// Look for config file in multiple locations
@@ -228,24 +238,31 @@ func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 		v.SetConfigType("yaml")
 		v.AddConfigPath(".")
 		v.AddConfigPath("./config")
-		v.AddConfigPath("$HOME/.crawler")
+
+		// Add home directory path
+		if home, err := os.UserHomeDir(); err == nil {
+			v.AddConfigPath(filepath.Join(home, ".crawler"))
+		}
 		v.AddConfigPath("/etc/crawler")
 	}
 
-	// Set environment variable configuration
+	// Set environment variable configuration with comprehensive key mapping
 	v.SetEnvPrefix("CRAWLER")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	v.AutomaticEnv()
 
-	// Set default values
-	setDefaults(v)
+	// Bind specific environment variables for better support
+	bindEnvVariables(v)
 
 	// Read configuration file if it exists
+	configFileUsed := ""
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 		// Config file not found; using defaults and env vars
+	} else {
+		configFileUsed = v.ConfigFileUsed()
 	}
 
 	// Bind command line flags if provided
@@ -261,12 +278,42 @@ func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	// Set metadata about config loading
+	config.configFileUsed = configFileUsed
+
 	// Validate configuration
 	if err := validateConfig(&config); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	return &config, nil
+}
+
+// bindEnvVariables explicitly binds environment variables for better support
+func bindEnvVariables(v *viper.Viper) {
+	// Common environment variable mappings
+	envMappings := map[string]string{
+		"crawler.user_agent":             "CRAWLER_USER_AGENT",
+		"rate_limit.requests_per_second": "CRAWLER_RATE_LIMIT_REQUESTS_PER_SECOND",
+		"storage.type":                   "CRAWLER_STORAGE_TYPE",
+		"storage.path":                   "CRAWLER_STORAGE_PATH",
+		"storage.connection_string":      "CRAWLER_STORAGE_CONNECTION_STRING",
+		"storage.s3_access_key":          "CRAWLER_S3_ACCESS_KEY",
+		"storage.s3_secret_key":          "CRAWLER_S3_SECRET_KEY",
+		"storage.s3_bucket":              "CRAWLER_S3_BUCKET",
+		"storage.s3_region":              "CRAWLER_S3_REGION",
+		"monitoring.log_level":           "CRAWLER_LOG_LEVEL",
+		"monitoring.log_file":            "CRAWLER_LOG_FILE",
+		"redis.addr":                     "CRAWLER_REDIS_ADDR",
+		"redis.password":                 "CRAWLER_REDIS_PASSWORD",
+		"security.auth_username":         "CRAWLER_AUTH_USERNAME",
+		"security.auth_password":         "CRAWLER_AUTH_PASSWORD",
+		"security.auth_token":            "CRAWLER_AUTH_TOKEN",
+	}
+
+	for key, env := range envMappings {
+		v.BindEnv(key, env)
+	}
 }
 
 // setDefaults sets all default configuration values
@@ -504,6 +551,68 @@ func validateConfig(config *Config) error {
 	if config.Frontier.PolitenessQueues <= 0 {
 		return fmt.Errorf("frontier.politeness_queues must be positive, got %d", config.Frontier.PolitenessQueues)
 	}
+	if config.Frontier.CheckpointInterval <= 0 {
+		return fmt.Errorf("frontier.checkpoint_interval must be positive, got %v", config.Frontier.CheckpointInterval)
+	}
+
+	// Validate robots settings
+	if config.Robots.CacheDuration <= 0 {
+		return fmt.Errorf("robots.cache_duration must be positive, got %v", config.Robots.CacheDuration)
+	}
+
+	// Validate Redis settings if Redis is used for frontier persistence
+	if config.Frontier.PersistentState && config.Storage.Type == "redis" {
+		if config.Redis.Addr == "" {
+			return fmt.Errorf("redis.addr is required when using Redis for frontier persistence")
+		}
+		if config.Redis.PoolSize <= 0 {
+			return fmt.Errorf("redis.pool_size must be positive, got %d", config.Redis.PoolSize)
+		}
+	}
+
+	// Validate security settings
+	validTLSVersions := map[string]bool{"1.0": true, "1.1": true, "1.2": true, "1.3": true}
+	if !validTLSVersions[config.Security.TLSMinVersion] {
+		return fmt.Errorf("invalid security.tls_min_version: %s. Valid options: 1.0, 1.1, 1.2, 1.3", config.Security.TLSMinVersion)
+	}
+
+	if config.Security.AuthEnabled {
+		validAuthTypes := map[string]bool{"basic": true, "bearer": true, "api_key": true}
+		if !validAuthTypes[config.Security.AuthType] {
+			return fmt.Errorf("invalid security.auth_type: %s. Valid options: basic, bearer, api_key", config.Security.AuthType)
+		}
+
+		if config.Security.AuthType == "basic" && (config.Security.AuthUsername == "" || config.Security.AuthPassword == "") {
+			return fmt.Errorf("security.auth_username and auth_password are required for basic auth")
+		}
+		if (config.Security.AuthType == "bearer" || config.Security.AuthType == "api_key") && config.Security.AuthToken == "" {
+			return fmt.Errorf("security.auth_token is required for %s auth", config.Security.AuthType)
+		}
+	}
+
+	// Validate language codes in content configuration
+	validLanguageCodes := map[string]bool{
+		"en": true, "es": true, "fr": true, "de": true, "it": true, "pt": true,
+		"ru": true, "zh": true, "ja": true, "ko": true, "ar": true, "hi": true,
+	}
+	for _, lang := range config.Content.Languages {
+		if !validLanguageCodes[lang] {
+			return fmt.Errorf("unsupported language code: %s. Supported codes: %v", lang, getKeys(validLanguageCodes))
+		}
+	}
+
+	// Validate seed URLs format
+	for i, url := range config.Crawler.SeedURLs {
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			return fmt.Errorf("crawler.seed_urls[%d] must be a valid HTTP/HTTPS URL, got: %s", i, url)
+		}
+	}
+
+	// Cross-validation: ensure consistent worker and queue settings
+	if config.Crawler.ConcurrentWorkers > config.Frontier.QueueCapacity {
+		return fmt.Errorf("crawler.concurrent_workers (%d) should not exceed frontier.queue_capacity (%d) to avoid starvation",
+			config.Crawler.ConcurrentWorkers, config.Frontier.QueueCapacity)
+	}
 
 	// Create required directories
 	if err := createDirectories(config); err != nil {
@@ -511,6 +620,15 @@ func validateConfig(config *Config) error {
 	}
 
 	return nil
+}
+
+// getKeys returns the keys of a map[string]bool as a slice
+func getKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // createDirectories creates required directories based on configuration
@@ -619,4 +737,9 @@ func redactConnectionString(connStr string) string {
 		return strings.Join(parts, " ")
 	}
 	return connStr
+}
+
+// ConfigFileUsed returns the path of the configuration file that was used to load the config
+func (c *Config) ConfigFileUsed() string {
+	return c.configFileUsed
 }

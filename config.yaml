@@ -1,32 +1,124 @@
+# Test configuration file for unit tests
 crawler:
-  max_pages: 10000
-  max_depth: 5
-  concurrent_workers: 10
-  request_timeout: 30s
-  user_agent: "LLMCrawler/1.0"
+  max_pages: 1000
+  max_depth: 3
+  concurrent_workers: 4
+  request_timeout: 15s
+  user_agent: "TestCrawler/1.0 (+https://github.com/test/crawler)"
+  seed_urls:
+    - "https://example.com"
+    - "https://test.com"
+  include_patterns:
+    - ".*\\.html"
+    - ".*\\.php"
+  exclude_patterns:
+    - ".*\\.(jpg|jpeg|png|gif|pdf)"
+  allowed_domains:
+    - "example.com"
+    - "test.com"
+  blocked_domains:
+    - "spam.com"
 
-# Rate limiting
 rate_limit:
-  requests_per_second: 2.0
-  burst: 10
+  requests_per_second: 1.5
+  burst: 5
   per_host_limit: true
+  default_delay: 2s
+  adaptive: true
+  respect_retry_after: true
+  failure_threshold: 3
+  recovery_timeout: 60s
+  max_requests: 5
 
-# Content processing
 content:
-  min_text_length: 100
-  max_text_length: 100000
-  languages: ["en", "es", "fr", "de"]
-  quality_threshold: 0.7
+  min_text_length: 50
+  max_text_length: 50000
+  languages: ["en", "es", "fr"]
+  quality_threshold: 0.8
+  remove_boilerplate: true
+  extract_main_content: true
+  preserve_formatting: false
+  normalize_whitespace: true
+  deduplication:
+    enabled: true
+    url_fingerprinting: true
+    content_fingerprinting: true
+    semantic_similarity: true
+    similarity_threshold: 0.9
 
-# Storage
 storage:
-  type: "file" # options: file, postgres, badger
-  path: "./data"
-  batch_size: 1000
+  type: "file"
+  path: "./test_data"
+  batch_size: 100
   compression: true
+  file_format: "jsonl"
 
-# Monitoring
 monitoring:
-  metrics_port: 8080
-  log_level: "info"
+  log_level: "debug"
+  log_format: "json"
+  log_file: "./test_logs/crawler.log"
+  log_rotation: true
+  log_max_size: "10MB"
+  log_max_backups: 3
+  metrics_enabled: true
+  metrics_port: 8081
+  metrics_path: "/metrics"
+  health_port: 8081
+  health_path: "/health"
   enable_profiling: false
+  profiling_port: 6061
+  tracing_enabled: false
+  service_name: "test-crawler"
+  tracing_sample_rate: 0.1
+
+http:
+  max_idle_connections: 100
+  max_idle_connections_per_host: 10
+  idle_connection_timeout: 30s
+  disable_keep_alives: false
+  timeout: 15s
+  dial_timeout: 3s
+  tls_handshake_timeout: 5s
+  response_header_timeout: 5s
+  disable_compression: false
+  accept_encoding: "gzip, deflate"
+
+frontier:
+  queue_capacity: 10000
+  priority_queues: 5
+  politeness_queues: 100
+  checkpoint_interval: 30s
+  persistent_state: true
+  url_normalization: true
+  canonicalization: true
+  remove_fragments: true
+  sort_query_params: true
+
+robots:
+  enabled: true
+  cache_duration: 12h
+  user_agent: "*"
+  crawl_delay_override: false
+  respect_crawl_delay: true
+
+redis:
+  addr: "localhost:6380"
+  password: ""
+  db: 1
+  pool_size: 5
+  min_idle_connections: 2
+  max_retries: 2
+  retry_delay: 500ms
+
+security:
+  tls_insecure_skip_verify: false
+  tls_min_version: "1.2"
+  auth_enabled: false
+  auth_type: "basic"
+
+features:
+  javascript_rendering: false
+  semantic_analysis: true
+  content_classification: true
+  multi_language_processing: true
+  real_time_streaming: false
