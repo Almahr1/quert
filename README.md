@@ -119,7 +119,7 @@ make docker-compose-up
 
 ### Pre-built Binaries
 
-Download the latest release from the [releases page](https://github.com/Almahr1/quert/releases).
+Download the latest release from the [releases page](https://github.com/Almahr1/quert/releases). **(PLACEHOLDER)**
 
 ## Configuration
 
@@ -179,7 +179,7 @@ export STORAGE_CONNECTION_STRING="postgresql://user:pass@localhost/crawler"
 
 ### Advanced Configuration
 
-For production deployments, see the [complete configuration reference](docs/configuration.md).
+For production deployments, see the [complete configuration reference](docs/configuration.md). **(PLACEHOLDER)**
 
 ## Usage
 
@@ -363,7 +363,7 @@ go test -v ./internal/crawler -run TestCrawlerBasic
 go test -bench=. ./internal/frontier
 ```
 
-## Performance
+## Performance **(PLACEHOLDER) All Theoretical, Will Updated After Working Product Is Made**
 
 ### Benchmarks
 
