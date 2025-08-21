@@ -450,10 +450,6 @@ volumes:
   postgres_data:
 ```
 
-### Kubernetes Deployment
-
-See [deployments/k8s/](deployments/k8s/) for Kubernetes manifests.
-
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
