@@ -10,6 +10,15 @@ A high-performance, production-grade web crawler built in Go designed specifical
   The project is still in early development, much of the features spoken about here are 
   conceptual and haven't been implemented yet. Bear with us.
 
+## Development Transparency
+
+This project was built by humans, augmented by AI. I believe in using the best tools for the job:
+
+*   **Human-Led:** The core architecture, design decisions, complex logic, and final implementation were meticulously planned and executed by a human developer.
+*   **AI-Assisted:** To boost productivity, I utilized AI (primarily LLMs) for generating repetitive boilerplate code, comprehensive test cases, and initial drafts of documentation. All AI-generated content was rigorously reviewed, tested, and adapted to fit the project's standards.
+
+This approach allowed me to focus my creative energy on solving hard problems rather than repetitive tasks.
+
 ## Features
 
 **Core Crawling Capabilities**
