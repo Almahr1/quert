@@ -337,7 +337,7 @@ func (m *MockStorage) Store(content Content) error {
 
 ## Implementation Checklist
 
-### 🎯 Project Setup Phase (Week 1)
+### ✅ **COMPLETED - Foundation Phase (Days 1-3)**
 
 #### Environment Setup
 - [x] Install Go 1.21+ and verify with `go version`
@@ -362,23 +362,25 @@ func (m *MockStorage) Store(content Content) error {
 - [x] Add configuration validation function
 - [x] Write unit tests for configuration loading
 
-### 🔧 Core Components Phase (Week 2-3)
+#### HTTP Client Setup (Advanced Implementation)
+- [x] Create `internal/client/http.go` for HTTP client wrapper
+- [x] Configure connection pooling and timeouts
+- [x] Add retry logic with exponential backoff
+- [x] Implement request/response logging middleware
+- [x] Add User-Agent header configuration
+- [x] Write unit tests with httptest
 
-#### HTTP Client Setup
-- [ ] Create `internal/client/http.go` for HTTP client wrapper
-- [ ] Configure connection pooling and timeouts
-- [ ] Add retry logic with exponential backoff
-- [ ] Implement request/response logging middleware
-- [ ] Add User-Agent header configuration
-- [ ] Write unit tests with httptest
+#### URL Management (Production-Ready Implementation)
+- [x] Create `internal/frontier/url.go` for URL normalization
+- [x] Implement comprehensive URL validation and filtering
+- [x] Add URL parsing and canonicalization functions
+- [x] Create domain extraction utilities (domain, subdomain, TLD)
+- [x] Implement multi-level URL deduplication (exact, content hash, simhash, semantic)
+- [x] Create URLProcessor with batch processing and statistics
+- [x] Add URLNormalizer with configurable rules
+- [x] Implement URLValidator with pattern matching and filtering
 
-#### URL Management
-- [ ] Create `internal/frontier/url.go` for URL normalization
-- [ ] Implement URL validation and filtering
-- [ ] Add URL parsing and canonicalization functions
-- [ ] Create domain extraction utilities
-- [ ] Implement URL deduplication with map/set
-- [ ] Write comprehensive URL processing tests
+### 🚀 **CURRENT - Core Crawler Phase (Days 4-7)**
 
 #### Robots.txt Handler
 - [ ] Install robots parser: `go get github.com/temoto/robotstxt`
@@ -387,8 +389,6 @@ func (m *MockStorage) Store(content Content) error {
 - [ ] Add URL permission checking logic
 - [ ] Set up 24-hour cache expiration
 - [ ] Write tests with mock robots.txt files
-
-### 🚀 Crawling Engine Phase (Week 3-4)
 
 #### Worker Pool Implementation
 - [ ] Create `internal/crawler/worker.go`
@@ -406,29 +406,20 @@ func (m *MockStorage) Store(content Content) error {
 - [ ] Create adaptive rate adjustment logic
 - [ ] Test rate limiting with mock time
 
-#### Circuit Breaker
-- [ ] Install gobreaker: `go get github.com/sony/gobreaker`
-- [ ] Create `internal/circuit/breaker.go`
-- [ ] Configure circuit breaker per host
-- [ ] Implement failure threshold settings
-- [ ] Add recovery testing logic
-- [ ] Write circuit breaker state tests
-
-### 📊 Content Processing Phase (Week 4-5)
-
-#### HTML Parser Integration
+#### Basic Content Extraction
 - [ ] Install goquery: `go get github.com/PuerkitoBio/goquery`
 - [ ] Create `internal/extractor/html.go`
-- [ ] Implement basic HTML parsing
-- [ ] Add CSS selector-based extraction
-- [ ] Create link extraction function
-- [ ] Write HTML parsing tests
+- [ ] Implement basic HTML parsing and link extraction
+- [ ] Add simple text extraction and cleaning
+- [ ] Create basic storage interface and file writer
 
-#### Text Extraction
-- [ ] Create `internal/extractor/text.go`
-- [ ] Implement main content detection
+### 📊 **Content Processing Phase (Days 8-12)**
+
+#### Advanced HTML Processing
+- [ ] Enhance HTML parser with CSS selector-based extraction
+- [ ] Implement main content detection algorithms
 - [ ] Add boilerplate removal logic
-- [ ] Create text cleaning functions
+- [ ] Create comprehensive text cleaning functions
 - [ ] Implement unicode normalization
 - [ ] Test with various HTML samples
 
@@ -440,9 +431,17 @@ func (m *MockStorage) Store(content Content) error {
 - [ ] Implement content coherence scoring
 - [ ] Write quality assessment tests
 
-### 💾 Storage Layer Phase (Week 5-6)
+#### Circuit Breaker (Reliability)
+- [ ] Install gobreaker: `go get github.com/sony/gobreaker`
+- [ ] Create `internal/circuit/breaker.go`
+- [ ] Configure circuit breaker per host
+- [ ] Implement failure threshold settings
+- [ ] Add recovery testing logic
+- [ ] Write circuit breaker state tests
 
-#### Database Setup
+### 💾 **Storage & Infrastructure Phase (Days 13-16)**
+
+#### Storage Layer Implementation  
 - [ ] Choose storage backend (PostgreSQL/SQLite/BadgerDB)
 - [ ] Create `internal/storage/interface.go` with storage interface
 - [ ] Implement database connection pool
@@ -450,7 +449,7 @@ func (m *MockStorage) Store(content Content) error {
 - [ ] Add transaction support
 - [ ] Write storage integration tests
 
-#### Batch Processing
+#### Batch Processing & Data Management
 - [ ] Create `internal/storage/batch.go`
 - [ ] Implement batch writer with buffering
 - [ ] Add flush triggers (size/time based)
@@ -458,137 +457,101 @@ func (m *MockStorage) Store(content Content) error {
 - [ ] Implement error handling for failed writes
 - [ ] Test batch processing under load
 
-#### Data Serialization
-- [ ] Create `internal/storage/serializer.go`
-- [ ] Implement JSON/JSONL serialization
-- [ ] Add Parquet writer for bulk data
-- [ ] Create compression layer (gzip/snappy)
-- [ ] Implement data validation
-- [ ] Write serialization benchmarks
-
-### 🔍 URL Frontier Phase (Week 6-7)
-
-#### Priority Queue Implementation
+#### URL Frontier Queue Management
 - [ ] Create `internal/frontier/priority.go`
 - [ ] Implement heap-based priority queue
 - [ ] Add URL priority scoring logic
 - [ ] Create queue persistence mechanism
-- [ ] Implement queue size limits
+- [ ] Implement per-host politeness queues
 - [ ] Write priority queue tests
 
-#### Politeness Queue
-- [ ] Create `internal/frontier/politeness.go`
-- [ ] Implement per-host queuing
-- [ ] Add crawl delay enforcement
-- [ ] Create host scheduling logic
-- [ ] Implement queue balancing
-- [ ] Test politeness constraints
+### 🔍 **Advanced Features & Polish Phase (Days 17-24)**
 
-#### Deduplication System
-- [ ] Create `internal/dedup/deduplicator.go`
-- [ ] Implement Bloom filter for URLs
-- [ ] Add content hashing (SHA-256)
-- [ ] Create simhash for near-duplicates
-- [ ] Implement persistent dedup storage
-- [ ] Write deduplication benchmarks
+#### Data Serialization & Export
+- [ ] Create `internal/storage/serializer.go`
+- [ ] Implement JSON/JSONL serialization for training data
+- [ ] Add Parquet writer for bulk data export
+- [ ] Create compression layer (gzip/snappy)
+- [ ] Implement data validation and schema enforcement
+#### Advanced Content Quality & LLM Optimization
+- [ ] Create `internal/quality/scorer.go`
+- [ ] Implement text length validation and quality metrics
+- [ ] Add language detection (using whatlanggo)
+- [ ] Create spam/gibberish detection algorithms
+- [ ] Implement content coherence scoring for LLM training
+- [ ] Add semantic chunking for training data
+- [ ] Write quality assessment tests
 
-### 📈 Monitoring & Observability Phase (Week 7-8)
+#### Advanced Deduplication (Already Implemented - Polish Only)
+- [ ] Add Bloom filter optimization for memory efficiency
+- [ ] Tune simhash threshold parameters based on testing
+- [ ] Implement persistent deduplication storage (optional)
+- [ ] Add deduplication performance benchmarks
+- [ ] Create deduplication metrics and monitoring
 
-#### Metrics Collection
+### 📈 **Monitoring & Production Phase (Days 25-28)**
+
+#### Essential Monitoring
 - [ ] Install Prometheus client: `go get github.com/prometheus/client_golang`
 - [ ] Create `internal/metrics/collector.go`
-- [ ] Add counter metrics (pages crawled, errors)
-- [ ] Implement gauge metrics (queue depth, workers)
-- [ ] Add histogram metrics (response times)
+- [ ] Add key metrics (pages crawled, errors, queue depth, response times)
 - [ ] Create metrics endpoint handler
+- [ ] Add basic structured logging with standard library or logrus
+- [ ] Implement health check endpoint
+- [ ] Create graceful shutdown handling
 
-#### Structured Logging
-- [ ] Install zerolog: `go get github.com/rs/zerolog`
-- [ ] Create `internal/logging/logger.go`
-- [ ] Implement log levels and formatting
-- [ ] Add request/response logging
-- [ ] Create error tracking with stack traces
-- [ ] Write logging configuration tests
+#### Production Hardening
+- [ ] Add comprehensive error handling and recovery
+- [ ] Implement configuration validation and startup checks
+- [ ] Create integration tests for full pipeline
+- [ ] Add benchmarks and performance tests
+- [ ] Document deployment and operational procedures
 
-#### Health Checks
-- [ ] Create `internal/health/checker.go`
-- [ ] Implement liveness probe endpoint
-- [ ] Add readiness probe with dependency checks
-- [ ] Create status page with metrics
-- [ ] Implement graceful degradation
-- [ ] Test health check scenarios
+## **🚀 Revised Realistic Timeline Summary**
 
-### 🧪 Testing Phase (Week 8-9)
+### **Total Project Duration: ~4 weeks (28 days) vs original 10 weeks**
 
-#### Unit Testing
-- [ ] Achieve 80% code coverage for core modules
-- [ ] Write table-driven tests for URL processing
-- [ ] Create mock implementations for interfaces
-- [ ] Add fuzzing tests for parsers
-- [ ] Implement property-based tests
-- [ ] Set up test data fixtures
+**Current Status**: ✅ **Days 1-3 COMPLETED** (Foundation Phase - originally Weeks 1-3)
+- Advanced HTTP client, comprehensive URL processing, multi-level deduplication
 
-#### Integration Testing
-- [ ] Create `test/integration/` directory
-- [ ] Write end-to-end crawling tests
-- [ ] Test with local mock server
-- [ ] Verify data pipeline integrity
-- [ ] Test error recovery scenarios
-- [ ] Benchmark performance metrics
+**Phase Breakdown:**
+- **Days 4-7**: Core crawler (robots.txt, workers, rate limits, basic extraction) → **Working Demo**
+- **Days 8-12**: Advanced content processing and quality assessment 
+- **Days 13-16**: Storage, persistence, and queue management
+- **Days 17-24**: Advanced features, LLM optimization, quality scoring
+- **Days 25-28**: Monitoring, production hardening, documentation
 
-#### Load Testing
-- [ ] Create load test scenarios
-- [ ] Test with 1000 concurrent URLs
-- [ ] Measure memory usage under load
-- [ ] Verify rate limiting effectiveness
-- [ ] Test circuit breaker triggers
-- [ ] Document performance baselines
+**Key Milestones:**
+- **Day 7**: Basic working crawler crawling and storing pages
+- **Day 14**: Production-ready crawler with storage and queues  
+- **Day 21**: LLM-optimized crawler with quality assessment
+- **Day 28**: Full production deployment with monitoring
 
-### 🚢 Production Readiness Phase (Week 9-10)
+**Buffer Time**: Each phase includes ~20-30% buffer for unexpected complexity
 
-#### Documentation
-- [ ] Write comprehensive README
-- [ ] Create API documentation
-- [ ] Document configuration options
-- [ ] Add architecture diagrams
-- [ ] Create runbook for operations
-- [ ] Write troubleshooting guide
+---
 
-#### Docker/Deployment
-- [ ] Create multi-stage Dockerfile
-- [ ] Optimize Docker image size
-- [ ] Add docker-compose for full stack
-- [ ] Create Kubernetes manifests (optional)
-- [ ] Set up environment-specific configs
-- [ ] Test container health checks
+## **🎯 Development Focus Areas**
 
-#### Security Review
-- [ ] Run security scanner (gosec)
-- [ ] Check for dependency vulnerabilities
-- [ ] Implement rate limiting for API
-- [ ] Add input validation everywhere
-- [ ] Review error messages for info leaks
-- [ ] Test with malformed inputs
+### **Immediate Priority (Next 4 Days)**
+1. **Robots.txt handler** - Essential for ethical crawling
+2. **Worker pool implementation** - Core crawling engine
+3. **Basic HTML extraction** - Content processing pipeline
+4. **Simple file storage** - Data persistence
 
-### ✅ Final Optimization Phase (Week 10+)
+### **Medium Priority (Days 8-14)**  
+1. **Advanced content quality** - LLM training optimization
+2. **Storage layer** - Database integration and batch processing
+3. **Queue management** - Priority and politeness enforcement
 
-#### Performance Tuning
-- [ ] Profile CPU usage with pprof
-- [ ] Analyze memory allocations
-- [ ] Optimize hot code paths
-- [ ] Tune garbage collector settings
-- [ ] Adjust worker pool sizes
-- [ ] Optimize database queries
+### **Lower Priority (Days 15-28)**
+1. **Advanced features** - Semantic analysis, quality scoring
+2. **Monitoring & metrics** - Operational excellence
+3. **Performance optimization** - Production hardening
 
-#### Advanced Features
-- [ ] Implement JavaScript rendering (optional)
-- [ ] Add sitemap.xml support
-- [ ] Create RSS/Atom feed detection
-- [ ] Implement adaptive crawling strategies
-- [ ] Add machine learning quality scoring
-- [ ] Create distributed crawling support
+---
 
-### 🎮 Quick Reference Commands
+## **📋 Quick Reference & Commands**
 
 ```bash
 # Development

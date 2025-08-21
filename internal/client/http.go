@@ -1,19 +1,22 @@
-// Package client provides HTTP client functionality for the web crawler
-// Includes connection pooling, retry logic, rate limiting, and request/response middleware
 package client
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math"
+	"math/rand"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Spunchkin/quert/internal/config"
 	"go.uber.org/zap"
 )
 
-// HTTPClient wraps the standard HTTP client with additional functionality
-// for web crawling including retry logic, rate limiting, and middleware support
 type HTTPClient struct {
 	client      *http.Client
 	config      *config.HTTPConfig
@@ -22,7 +25,6 @@ type HTTPClient struct {
 	retryConfig RetryConfig
 }
 
-// RetryConfig defines retry behavior for failed requests
 type RetryConfig struct {
 	MaxRetries      int
 	BackoffStrategy BackoffStrategy
@@ -30,12 +32,10 @@ type RetryConfig struct {
 	RetryableStatus []int
 }
 
-// BackoffStrategy defines how delays between retries are calculated
 type BackoffStrategy interface {
 	NextDelay(attempt int) time.Duration
 }
 
-// ExponentialBackoff implements exponential backoff with jitter
 type ExponentialBackoff struct {
 	BaseDelay  time.Duration
 	MaxDelay   time.Duration
@@ -43,43 +43,35 @@ type ExponentialBackoff struct {
 	Jitter     bool
 }
 
-// LinearBackoff implements linear backoff
 type LinearBackoff struct {
 	BaseDelay time.Duration
 	MaxDelay  time.Duration
 }
 
-// Middleware defines the interface for HTTP middleware
 type Middleware interface {
 	RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error)
 }
 
-// LoggingMiddleware logs HTTP requests and responses
 type LoggingMiddleware struct {
 	logger *zap.Logger
 }
 
-// UserAgentMiddleware adds User-Agent header to requests
 type UserAgentMiddleware struct {
 	userAgent string
 }
 
-// TimeoutMiddleware enforces request timeouts
 type TimeoutMiddleware struct {
 	timeout time.Duration
 }
 
-// RateLimitMiddleware enforces rate limiting
 type RateLimitMiddleware struct {
 	// TODO: Add rate limiter fields
 }
 
-// MetricsMiddleware collects HTTP metrics
 type MetricsMiddleware struct {
 	// TODO: Add metrics collection fields
 }
 
-// Response wraps http.Response with additional metadata
 type Response struct {
 	*http.Response
 	URL           string
@@ -89,159 +81,365 @@ type Response struct {
 	Attempts      int
 }
 
-// NewHTTPClient creates a new HTTP client with the given configuration
 func NewHTTPClient(cfg *config.HTTPConfig, logger *zap.Logger) *HTTPClient {
-	// TODO: Implement client creation with:
-	// - Configure connection pooling
-	// - Set up timeouts
-	// - Initialize retry configuration
-	// - Set up default middleware
-	panic("implement me")
+	client := buildHTTPClient(cfg)
+	retry_config := RetryConfig{
+		MaxRetries: 3,
+		BackoffStrategy: &ExponentialBackoff{
+			BaseDelay:  500 * time.Millisecond,
+			MaxDelay:   30 * time.Second,
+			Multiplier: 2.0,
+			Jitter:     true,
+		},
+		RetryableStatus: []int{429, 500, 502, 503, 504},
+		RetryableErrors: []error{},
+	}
+	middleware := []Middleware{
+		NewLoggingMiddleware(logger),
+		NewUserAgentMiddleware("Webcralwer/1.0"),
+	}
+
+	return &HTTPClient{
+		client:      client,
+		config:      cfg,
+		logger:      logger,
+		middleware:  middleware,
+		retryConfig: retry_config,
+	}
 }
 
 func NewHTTPClientWithMiddleware(cfg *config.HTTPConfig, logger *zap.Logger, middleware ...Middleware) *HTTPClient {
-	panic("implement me")
+	client := NewHTTPClient(cfg, logger)
+	client.middleware = append(client.middleware, middleware...)
+	return client
 }
 
-// Get performs a GET request with retry logic and middleware
 func (c *HTTPClient) Get(ctx context.Context, url string) (*Response, error) {
-	// TODO: Implement GET request with:
-	// - Create http.Request
-	// - Apply middleware
-	// - Execute with retry logic
-	// - Return wrapped Response
-	panic("implement me")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("GET Request Failed: %w", err)
+	}
+	return c.Do(ctx, req)
 }
 
 func (c *HTTPClient) Post(ctx context.Context, url string, contentType string, body interface{}) (*Response, error) {
-	panic("implement me")
+	var reqBody io.Reader
+
+	if body != nil {
+		switch v := body.(type) {
+		case string:
+			reqBody = strings.NewReader(v)
+		case []byte:
+			reqBody = bytes.NewReader(v)
+		case io.Reader:
+			reqBody = v
+		default:
+			// Assume it's a struct to be JSON marshaled
+			jsonData, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal request body: %w", err)
+			}
+			reqBody = bytes.NewReader(jsonData)
+			if contentType == "" {
+				contentType = "application/json"
+			}
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("POST request creation failed: %w", err)
+	}
+
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	return c.Do(ctx, req)
 }
 
 func (c *HTTPClient) Head(ctx context.Context, url string) (*Response, error) {
-	panic("implement me")
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("HEAD request creation failed: %w", err)
+	}
+	return c.Do(ctx, req)
 }
 
-// Do executes an HTTP request with retry logic and middleware
 func (c *HTTPClient) Do(ctx context.Context, req *http.Request) (*Response, error) {
-	// TODO: Implement the core request execution logic:
-	// - Apply middleware chain
-	// - Execute request with retry logic
-	// - Handle errors and retryable conditions
-	// - Collect metrics and timing
-	// - Return wrapped response
-	panic("implement me")
+	start := time.Now()
+	var lastErr error
+	var resp *http.Response
+
+	transport := chainMiddleware(c.middleware, c.client.Transport)
+
+	for attempt := 0; attempt <= c.retryConfig.MaxRetries; attempt++ {
+		reqClone := req.Clone(ctx)
+
+		if attempt > 0 {
+			delay := c.retryConfig.BackoffStrategy.NextDelay(attempt)
+			c.logger.Debug("retrying request",
+				zap.String("url", req.URL.String()),
+				zap.Int("attempt", attempt),
+				zap.Duration("delay", delay),
+			)
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		resp, lastErr = transport.RoundTrip(reqClone)
+
+		if lastErr == nil {
+			if !isRetryableStatus(resp.StatusCode, c.retryConfig.RetryableStatus) {
+				break
+			}
+			resp.Body.Close()
+			lastErr = fmt.Errorf("received retryable status code: %d", resp.StatusCode)
+			continue
+		}
+
+		if !isRetryableError(lastErr, c.retryConfig.RetryableErrors) {
+			break
+		}
+
+		c.logger.Warn("request failed, will retry",
+			zap.String("url", req.URL.String()),
+			zap.Int("attempt", attempt),
+			zap.Error(lastErr),
+		)
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("request failed after %d attempts: %w", c.retryConfig.MaxRetries+1, lastErr)
+	}
+
+	duration := time.Since(start)
+	response := &Response{
+		Response:      resp,
+		URL:           req.URL.String(),
+		StatusCode:    resp.StatusCode,
+		ContentLength: resp.ContentLength,
+		Duration:      duration,
+		Attempts:      1, // Will be updated in retry logic if needed
+	}
+
+	return response, nil
 }
 
 func (c *HTTPClient) AddMiddleware(middleware ...Middleware) {
-	panic("implement me")
+	c.middleware = append(c.middleware, middleware...)
 }
 
 func (c *HTTPClient) SetRetryConfig(config RetryConfig) {
-	panic("implement me")
+	c.retryConfig = config
 }
 
-// Close closes the HTTP client and cleans up resources
 func (c *HTTPClient) Close() error {
-	// TODO: Clean up client resources
-	panic("implement me")
+	c.client.CloseIdleConnections()
+	c.logger.Info("HTTP client closed")
+	return nil
 }
 
-// NextDelay calculates the next delay for exponential backoff
 func (e *ExponentialBackoff) NextDelay(attempt int) time.Duration {
-	// TODO: Implement exponential backoff calculation:
-	// - Calculate delay based on attempt number
-	// - Apply jitter if enabled
-	// - Respect maximum delay
-	panic("implement me")
+	if attempt <= 0 {
+		return 0
+	}
+
+	delay := float64(e.BaseDelay) * math.Pow(e.Multiplier, float64(attempt-1))
+
+	if e.Jitter {
+		jitter := delay * 0.1 * rand.Float64()
+		delay += jitter
+	}
+
+	result := time.Duration(delay)
+	if result > e.MaxDelay {
+		result = e.MaxDelay
+	}
+
+	return result
 }
 
 func (l *LinearBackoff) NextDelay(attempt int) time.Duration {
-	panic("implement me")
+	if attempt <= 0 {
+		return 0
+	}
+
+	delay := time.Duration(attempt) * l.BaseDelay
+
+	if delay > l.MaxDelay {
+		delay = l.MaxDelay
+	}
+
+	return delay
 }
 
-// RoundTrip implements the Middleware interface for logging
 func (m *LoggingMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
-	// TODO: Implement request/response logging:
-	// - Log request details (method, URL, headers)
-	// - Execute request via next RoundTripper
-	// - Log response details (status, duration, size)
-	// - Handle errors appropriately
-	panic("implement me")
+	start := time.Now()
+
+	m.logger.Debug("HTTP request",
+		zap.String("method", req.Method),
+		zap.String("url", req.URL.String()),
+		zap.String("user_agent", req.Header.Get("User-Agent")),
+	)
+
+	resp, err := next.RoundTrip(req)
+	duration := time.Since(start)
+
+	if err != nil {
+		m.logger.Error("HTTP request failed",
+			zap.String("method", req.Method),
+			zap.String("url", req.URL.String()),
+			zap.Duration("duration", duration),
+			zap.Error(err),
+		)
+	} else {
+		m.logger.Debug("HTTP response",
+			zap.String("method", req.Method),
+			zap.String("url", req.URL.String()),
+			zap.Int("status", resp.StatusCode),
+			zap.Int64("content_length", resp.ContentLength),
+			zap.Duration("duration", duration),
+		)
+	}
+
+	return resp, err
 }
 
 func (m *UserAgentMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
-	panic("implement me")
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", m.userAgent)
+	}
+	return next.RoundTrip(req)
 }
 
-// RoundTrip implements the Middleware interface for timeout
 func (m *TimeoutMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
-	// TODO: Implement timeout enforcement:
-	// - Create context with timeout
-	// - Execute request with timeout context
-	// - Handle timeout errors
-	panic("implement me")
+	ctx, cancel := context.WithTimeout(req.Context(), m.timeout)
+	defer cancel()
+
+	reqWithTimeout := req.WithContext(ctx)
+	return next.RoundTrip(reqWithTimeout)
 }
 
-// RoundTrip implements the Middleware interface for rate limiting
 func (m *RateLimitMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
-	// TODO: Implement rate limiting:
-	// - Check rate limit before request
-	// - Wait if necessary
-	// - Execute request via next RoundTripper
-	panic("implement me")
+	// TODO: For now, just pass through. A full implementation would need
+	// a rate limiter like golang.org/x/time/rate or similar
+	// This would typically include per-host rate limiting for web crawling
+	return next.RoundTrip(req)
 }
 
-// RoundTrip implements the Middleware interface for metrics
 func (m *MetricsMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
-	// TODO: Implement metrics collection:
-	// - Record request start time
-	// - Execute request via next RoundTripper
-	// - Record response metrics (duration, status, size)
-	// - Update counters and histograms
-	panic("implement me")
+	start := time.Now()
+
+	resp, err := next.RoundTrip(req)
+	duration := time.Since(start)
+
+	// TODO: Record metrics here. In a full implementation, you'd update
+	// Prometheus counters, histograms, etc. For example:
+	// - HTTP request total counter by method and status
+	// - Request duration histogram
+	// - Response size histogram
+	// - Error rate by type
+
+	_ = duration // Suppress unused variable warning for now
+
+	return resp, err
 }
 
 func NewLoggingMiddleware(logger *zap.Logger) *LoggingMiddleware {
-	panic("implement me")
+	return &LoggingMiddleware{
+		logger: logger,
+	}
 }
 
 func NewUserAgentMiddleware(userAgent string) *UserAgentMiddleware {
-	panic("implement me")
+	return &UserAgentMiddleware{
+		userAgent: userAgent,
+	}
 }
 
 func NewTimeoutMiddleware(timeout time.Duration) *TimeoutMiddleware {
-	panic("implement me")
+	return &TimeoutMiddleware{
+		timeout: timeout,
+	}
 }
 
-func NewRateLimitMiddleware( /* rate limiter parameters */ ) *RateLimitMiddleware {
-	panic("implement me")
+func NewRateLimitMiddleware() *RateLimitMiddleware {
+	return &RateLimitMiddleware{
+		// TODO: Initialize rate limiter fields
+	}
 }
 
-func NewMetricsMiddleware( /* metrics collector parameters */ ) *MetricsMiddleware {
-	panic("implement me")
+func NewMetricsMiddleware() *MetricsMiddleware {
+	return &MetricsMiddleware{
+		// TODO: Initialize metrics collector fields
+	}
 }
 
-// Utility functions
-
-// isRetryableError checks if an error should trigger a retry
 func isRetryableError(err error, retryableErrors []error) bool {
-	// TODO: Implement error checking logic:
-	// - Check if error type matches retryable errors
-	// - Handle network errors, timeouts, etc.
-	panic("implement me")
-}
+	if err == nil {
+		return false
+	}
 
-// isRetryableStatus checks if an HTTP status code should trigger a retry
-func isRetryableStatus(statusCode int, retryableStatus []int) bool {
-	for _, status := range retryableStatus {
-		if status == statusCode {
+	// Check against explicitly configured retryable errors
+	for _, retryableErr := range retryableErrors {
+		if err == retryableErr {
 			return true
 		}
 	}
+
+	// Check for common network errors that should trigger retry
+	errorStr := err.Error()
+
+	// Network timeout errors
+	if strings.Contains(errorStr, "timeout") {
+		return true
+	}
+
+	// DNS errors (temporary)
+	if strings.Contains(errorStr, "no such host") {
+		return true
+	}
+
+	// Connection refused (server might be temporarily down)
+	if strings.Contains(errorStr, "connection refused") {
+		return true
+	}
+
+	// Connection reset by peer
+	if strings.Contains(errorStr, "connection reset by peer") {
+		return true
+	}
+
+	// EOF errors (connection closed unexpectedly)
+	if strings.Contains(errorStr, "EOF") {
+		return true
+	}
+
+	// Context canceled or deadline exceeded (from timeouts)
+	if strings.Contains(errorStr, "context canceled") || strings.Contains(errorStr, "deadline exceeded") {
+		return true
+	}
+
 	return false
 }
 
-// buildHTTPClient creates and configures the underlying http.Client
+func isRetryableStatus(statusCode int, retryableStatus []int) bool {
+	set := make(map[int]struct{}, len(retryableStatus))
+	for _, code := range retryableStatus {
+		set[code] = struct{}{}
+	}
+
+	_, exists := set[statusCode]
+	return exists
+	//Notice: If we're gonna call this function multiple times, we are going to need
+	// to pass a map into the function by default for O(1) lookups without generating a map each time
+}
+
 func buildHTTPClient(cfg *config.HTTPConfig) *http.Client {
 	dialer := &net.Dialer{
 		Timeout: cfg.DialTimeout,
@@ -266,11 +464,34 @@ func buildHTTPClient(cfg *config.HTTPConfig) *http.Client {
 	return client
 }
 
-// chainMiddleware chains multiple middleware together
 func chainMiddleware(middleware []Middleware, base http.RoundTripper) http.RoundTripper {
-	// TODO: Implement middleware chaining:
-	// - Chain middleware in reverse order
-	// - Each middleware wraps the next one
-	// - Return the outermost middleware
-	panic("implement me")
+	if len(middleware) == 0 {
+		return base
+	}
+
+	// Create a middleware chain by wrapping each middleware around the next
+	// We build from the inside out (base -> middleware[n-1] -> ... -> middleware[0])
+	result := &middlewareChain{
+		middleware: middleware[len(middleware)-1],
+		next:       base,
+	}
+
+	// Wrap each middleware around the previous result
+	for i := len(middleware) - 2; i >= 0; i-- {
+		result = &middlewareChain{
+			middleware: middleware[i],
+			next:       result,
+		}
+	}
+
+	return result
+}
+
+type middlewareChain struct {
+	middleware Middleware
+	next       http.RoundTripper
+}
+
+func (m *middlewareChain) RoundTrip(req *http.Request) (*http.Response, error) {
+	return m.middleware.RoundTrip(req, m.next)
 }

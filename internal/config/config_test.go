@@ -24,11 +24,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	assert.Equal(t, 10, config.Crawler.ConcurrentWorkers)
 	assert.Equal(t, 30*time.Second, config.Crawler.RequestTimeout)
 	assert.Equal(t, "LLMCrawler/1.0 (+https://github.com/yourusername/crawler)", config.Crawler.UserAgent)
-	
+
 	assert.Equal(t, 2.0, config.RateLimit.RequestsPerSecond)
 	assert.Equal(t, 10, config.RateLimit.Burst)
 	assert.True(t, config.RateLimit.PerHostLimit)
-	
+
 	assert.Equal(t, "file", config.Storage.Type)
 	assert.Equal(t, "./data", config.Storage.Path)
 	assert.Equal(t, 1000, config.Storage.BatchSize)
@@ -88,10 +88,10 @@ monitoring:
 	assert.Equal(t, 20*time.Second, config.Crawler.RequestTimeout)
 	assert.Equal(t, "TestCrawler/1.0", config.Crawler.UserAgent)
 	assert.Equal(t, []string{"https://example.com", "https://test.com"}, config.Crawler.SeedURLs)
-	
+
 	assert.Equal(t, 1.5, config.RateLimit.RequestsPerSecond)
 	assert.Equal(t, 5, config.RateLimit.Burst)
-	
+
 	assert.Equal(t, "file", config.Storage.Type)
 	assert.Equal(t, "./test_data", config.Storage.Path)
 	assert.Equal(t, 500, config.Storage.BatchSize)
@@ -110,15 +110,15 @@ monitoring:
 func TestLoadConfigFromEnvironment(t *testing.T) {
 	// Set environment variables
 	envVars := map[string]string{
-		"CRAWLER_CRAWLER_MAX_PAGES":                "2000",
-		"CRAWLER_CRAWLER_CONCURRENT_WORKERS":       "6",
-		"CRAWLER_RATE_LIMIT_REQUESTS_PER_SECOND":   "3.0",
-		"CRAWLER_STORAGE_TYPE":                     "postgres",
-		"CRAWLER_STORAGE_CONNECTION_STRING":        "postgresql://user:pass@localhost/db",
-		"CRAWLER_MONITORING_LOG_LEVEL":             "warn",
-		"CRAWLER_USER_AGENT":                       "EnvCrawler/1.0",
-		"CRAWLER_S3_BUCKET":                        "test-bucket",
-		"CRAWLER_LOG_LEVEL":                        "error",
+		"CRAWLER_CRAWLER_MAX_PAGES":              "2000",
+		"CRAWLER_CRAWLER_CONCURRENT_WORKERS":     "6",
+		"CRAWLER_RATE_LIMIT_REQUESTS_PER_SECOND": "3.0",
+		"CRAWLER_STORAGE_TYPE":                   "postgres",
+		"CRAWLER_STORAGE_CONNECTION_STRING":      "postgresql://user:pass@localhost/db",
+		"CRAWLER_MONITORING_LOG_LEVEL":           "warn",
+		"CRAWLER_USER_AGENT":                     "EnvCrawler/1.0",
+		"CRAWLER_S3_BUCKET":                      "test-bucket",
+		"CRAWLER_LOG_LEVEL":                      "error",
 	}
 
 	// Set environment variables
@@ -159,7 +159,7 @@ func TestLoadConfigWithFlags(t *testing.T) {
 	// Parse flags (note: viper expects underscores in config keys)
 	err := flags.Parse([]string{
 		"--crawler.max_pages=3000",
-		"--crawler.user_agent=FlagCrawler/1.0", 
+		"--crawler.user_agent=FlagCrawler/1.0",
 		"--storage.type=badger",
 		"--monitoring.log_level=info",
 	})
@@ -222,13 +222,13 @@ monitoring:
 	// Verify precedence:
 	// max_pages: flag (3000) > env (2000) > config file (1000) > default (10000)
 	assert.Equal(t, 3000, config.Crawler.MaxPages)
-	
+
 	// user_agent: config file > default (no env var or flag set)
 	assert.Equal(t, "ConfigFileCrawler/1.0", config.Crawler.UserAgent)
-	
+
 	// storage.type: env var (postgres) > config file (file) > default (file)
 	assert.Equal(t, "postgres", config.Storage.Type)
-	
+
 	// log_level: config file (debug) > default (info)
 	assert.Equal(t, "debug", config.Monitoring.LogLevel)
 }
@@ -450,7 +450,7 @@ func TestValidateConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := tt.configFunc()
 			err := validateConfig(config)
-			
+
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.errorText != "" {
@@ -505,13 +505,13 @@ func TestConfigString(t *testing.T) {
 	}
 
 	str := config.String()
-	
+
 	// Verify sensitive data is redacted (except for connection string password since it's not in password= format)
 	assert.NotContains(t, str, "secretkey123456789")
 	assert.NotContains(t, str, "redispassword")
 	assert.NotContains(t, str, "authpass123")
 	assert.NotContains(t, str, "token123456789")
-	
+
 	// Verify redaction patterns (connection string password won't be redacted due to format)
 	assert.Contains(t, str, "AK*********89")
 	assert.Contains(t, str, "se**************89")
@@ -541,13 +541,13 @@ func TestGetLogger(t *testing.T) {
 func TestBindEnvVariables(t *testing.T) {
 	// This is an internal function, but we can test it indirectly
 	// by checking if the LoadConfig function properly handles the bound env vars
-	
+
 	os.Setenv("CRAWLER_S3_ACCESS_KEY", "test-access-key")
 	defer os.Unsetenv("CRAWLER_S3_ACCESS_KEY")
 
 	config, err := LoadConfig("", nil)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "test-access-key", config.Storage.S3AccessKey)
 }
 
@@ -574,7 +574,7 @@ func TestRedactFunctions(t *testing.T) {
 			expected: "pa*******23",
 		},
 		{
-			name:     "long string", 
+			name:     "long string",
 			input:    "verylongpasswordstring",
 			expected: "ve******************ng",
 		},
@@ -630,13 +630,13 @@ func TestGetKeys(t *testing.T) {
 		"banana": false,
 		"cherry": true,
 	}
-	
+
 	keys := getKeys(m)
 	assert.Len(t, keys, 3)
 	assert.Contains(t, keys, "apple")
 	assert.Contains(t, keys, "banana")
 	assert.Contains(t, keys, "cherry")
-	
+
 	// Test empty map
 	emptyKeys := getKeys(map[string]bool{})
 	assert.Len(t, emptyKeys, 0)
@@ -658,7 +658,7 @@ func BenchmarkValidateConfig(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		err := validateConfig(config)

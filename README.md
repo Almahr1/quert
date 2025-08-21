@@ -268,7 +268,10 @@ func main() {
 - **Content Pipeline**: Extracts and processes text for LLM training
 - **Storage Layer**: Persists processed data with compression and batching
 
-For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
+## Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Comprehensive architectural overview and component design
+- **[TECHNICAL_DECISIONS.md](TECHNICAL_DECISIONS.md)**: Detailed technical implementation decisions and rationale
 
 ## Development
 

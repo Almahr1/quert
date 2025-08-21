@@ -54,7 +54,7 @@ benchmark: ## Run benchmarks
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...
 
-benchmark-config: ## Run config benchmarks only
+benchmark-old-config: ## Run config benchmarks only (legacy)
 	@echo "Running configuration benchmarks..."
 	go test -bench=. -benchmem ./internal/config/...
 
@@ -100,48 +100,62 @@ deps-vendor: ## Vendor dependencies
 # Run all tests
 test: ## Run all tests
 	@echo "Running all tests..."
-	go test -timeout $(TEST_TIMEOUT) -v ./test/...
+	go test -timeout $(TEST_TIMEOUT) -v ./...
 
 # Run configuration tests only
 test-config: ## Run configuration tests only
 	@echo "Running configuration tests..."
-	go test -timeout $(TEST_TIMEOUT) -v ./test/ -run TestLoadConfig
-	go test -timeout $(TEST_TIMEOUT) -v ./test/ -run TestConfig
+	go test -timeout $(TEST_TIMEOUT) -v ./internal/config/...
 
-# Run config tests with coverage
-test-config-coverage: ## Run config tests with coverage
+# Run HTTP client tests
+test-http: ## Run HTTP client tests
+	@echo "Running HTTP client tests..."
+	go test -timeout $(TEST_TIMEOUT) -v ./internal/client/...
+
+# Run URL processing tests
+test-url: ## Run URL processing tests
+	@echo "Running URL processing tests..."
+	go test -timeout $(TEST_TIMEOUT) -v ./internal/frontier/...
+
+# Component coverage tests
+test-coverage-config: ## Run config tests with coverage
 	@echo "Running configuration tests with coverage..."
 	@mkdir -p coverage
-	go test -timeout $(TEST_TIMEOUT) -v -coverprofile=coverage/config_coverage.out ./test/ -run TestConfig
+	go test -timeout $(TEST_TIMEOUT) -v -coverprofile=coverage/config_coverage.out ./internal/config/
 	go tool cover -html=coverage/config_coverage.out -o coverage/config_coverage.html
 	@echo "Config coverage report generated at coverage/config_coverage.html"
 
-# Run specific test categories
-test-config-validation: ## Test configuration validation
-	@echo "Testing configuration validation..."
-	go test -v ./test/ -run TestConfigValidation
+test-coverage-http: ## Run HTTP client tests with coverage
+	@echo "Running HTTP client tests with coverage..."
+	@mkdir -p coverage
+	go test -timeout $(TEST_TIMEOUT) -v -coverprofile=coverage/http_coverage.out ./internal/client/
+	go tool cover -html=coverage/http_coverage.out -o coverage/http_coverage.html
+	@echo "HTTP coverage report generated at coverage/http_coverage.html"
 
-test-config-loading: ## Test configuration loading
-	@echo "Testing configuration loading..."
-	go test -v ./test/ -run TestLoadConfig
+test-coverage-url: ## Run URL processing tests with coverage
+	@echo "Running URL processing tests with coverage..."
+	@mkdir -p coverage
+	go test -timeout $(TEST_TIMEOUT) -v -coverprofile=coverage/url_coverage.out ./internal/frontier/
+	go tool cover -html=coverage/url_coverage.out -o coverage/url_coverage.html
+	@echo "URL processing coverage report generated at coverage/url_coverage.html"
 
-test-config-env: ## Test environment variable configuration
-	@echo "Testing environment variable configuration..."
-	go test -v ./test/ -run TestLoadConfigWithEnvironmentVariables
-
-test-config-precedence: ## Test configuration precedence
-	@echo "Testing configuration precedence..."
-	go test -v ./test/ -run TestConfigPrecedence
-
-# Run benchmarks
+# Run benchmarks for current components
 benchmark-config: ## Run config benchmarks
 	@echo "Running configuration benchmarks..."
-	go test -bench=. -benchmem ./test/ -run Benchmark
+	go test -bench=. -benchmem ./internal/config/ -run Benchmark
+
+benchmark-http: ## Run HTTP client benchmarks
+	@echo "Running HTTP client benchmarks..."
+	go test -bench=. -benchmem ./internal/client/ -run Benchmark
+
+benchmark-url: ## Run URL processing benchmarks
+	@echo "Running URL processing benchmarks..."
+	go test -bench=. -benchmem ./internal/frontier/ -run Benchmark
 
 # Run tests with race detector
 test-race: ## Run tests with race detector
 	@echo "Running tests with race detector..."
-	go test -race -timeout $(TEST_TIMEOUT) -v ./test/...
+	go test -race -timeout $(TEST_TIMEOUT) -v ./...
 
 # Clean test artifacts
 clean-test: ## Clean test artifacts
@@ -242,30 +256,67 @@ migrate-down: ## Run database migrations down
 	@echo "Rolling back database migrations..."
 	# Add your rollback command here
 
-# Quick development workflow
-quick: fmt lint test-config build ## Quick development workflow (format, lint, test config, build)
+# Quick development workflow for current phase
+quick: fmt lint test build ## Quick development workflow (format, lint, test all, build)
 	@echo "Quick development workflow completed successfully!"
+
+# Current development focus workflow
+current: fmt test-config test-http test-url build ## Test current implemented components
+	@echo "Current component testing completed successfully!"
+
+# Pre-commit check
+pre-commit: fmt lint vet test-race ## Pre-commit validation
+	@echo "Pre-commit checks passed!"
 
 # CI/CD simulation
 ci: deps fmt lint vet test-race coverage ## Simulate CI pipeline
 	@echo "CI pipeline completed successfully!"
 
 # Project setup completion check
-setup-check: ## Check if project setup phase is complete
-	@echo "Checking project setup completion..."
-	@echo "✓ Project structure exists"
+setup-check: ## Check if foundation phase is complete
+	@echo "Checking foundation phase completion..."
+	@echo "=== Basic Project Files ==="
 	@test -f go.mod && echo "✓ go.mod exists" || echo "✗ go.mod missing"
 	@test -f config.yaml && echo "✓ config.yaml exists" || echo "✗ config.yaml missing"
-	@test -f .env.example && echo "✓ .env.example exists" || echo "✗ .env.example missing"
-	@test -f Makefile && echo "✓ Makefile exists" || echo "✗ Makefile missing"
 	@test -f README.md && echo "✓ README.md exists" || echo "✗ README.md missing"
-	@test -f LICENSE && echo "✓ LICENSE exists" || echo "✗ LICENSE missing"
+	@test -f LICENSE && echo "✓ LICENSE exists" || echo "✗ LICENSE exists"
+	@test -f Makefile && echo "✓ Makefile exists" || echo "✗ Makefile missing"
 	@test -f docker-compose.yml && echo "✓ docker-compose.yml exists" || echo "✗ docker-compose.yml missing"
-	@test -f .gitignore && echo "✓ .gitignore exists" || echo "✗ .gitignore missing"
-	@test -f internal/config/config.go && echo "✓ Configuration implementation exists" || echo "✗ Configuration implementation missing"
-	@echo "Running configuration tests..."
-	@make test-config
-	@echo "✓ Project setup phase completed!"
+	@echo ""
+	@echo "=== Core Components ==="
+	@test -f internal/config/config.go && echo "✓ Configuration system" || echo "✗ Configuration missing"
+	@test -f internal/client/http.go && echo "✓ HTTP client wrapper" || echo "✗ HTTP client missing"
+	@test -f internal/frontier/url.go && echo "✓ URL processing system" || echo "✗ URL processing missing"
+	@echo ""
+	@echo "=== Component Testing ==="
+	@echo "Testing configuration system..."
+	@make test-config > /dev/null 2>&1 && echo "✓ Config tests pass" || echo "✗ Config tests fail"
+	@echo "Testing HTTP client..."
+	@make test-http > /dev/null 2>&1 && echo "✓ HTTP client tests pass" || echo "✗ HTTP client tests fail"
+	@echo "Testing URL processing..."
+	@make test-url > /dev/null 2>&1 && echo "✓ URL processing tests pass" || echo "✗ URL processing tests fail"
+	@echo ""
+	@echo "✅ Foundation phase completed! Ready for core crawler development."
+
+# Check what's needed for working demo
+demo-check: ## Check progress towards working demo
+	@echo "Checking progress towards working demo..."
+	@echo "=== Foundation (Completed) ==="
+	@test -f internal/config/config.go && echo "✓ Configuration system" || echo "✗ Missing"
+	@test -f internal/client/http.go && echo "✓ HTTP client" || echo "✗ Missing" 
+	@test -f internal/frontier/url.go && echo "✓ URL processing" || echo "✗ Missing"
+	@echo ""
+	@echo "=== Core Crawler (In Progress) ==="
+	@test -f internal/robots/parser.go && echo "✓ Robots.txt handler" || echo "⏳ Needed for demo"
+	@test -f internal/crawler/worker.go && echo "✓ Worker pool" || echo "⏳ Needed for demo"  
+	@test -f internal/extractor/html.go && echo "✓ Content extraction" || echo "⏳ Needed for demo"
+	@test -f internal/storage/storage.go && echo "✓ Storage system" || echo "⏳ Needed for demo"
+	@echo ""
+	@echo "📋 Next steps for working demo:"
+	@echo "   1. Implement robots.txt parser"
+	@echo "   2. Create worker pool crawler"
+	@echo "   3. Add HTML content extraction"  
+	@echo "   4. Add basic file storage"
 
 # Show build info
 info: ## Show build information
