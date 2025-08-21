@@ -1,5 +1,5 @@
 # Go Web Crawler Engineering Document for LLM Training Data Collection
-..brr testing
+
 ## Executive Summary
 
 This comprehensive engineering document provides detailed technical guidance for building a production-grade web crawler in Go designed to collect high-quality text data for language model training. The crawler architecture emphasizes **single-machine scalability** through sophisticated goroutine management, **ethical crawling practices** with robots.txt compliance, and **high-quality content extraction** optimized for LLM training pipelines.
