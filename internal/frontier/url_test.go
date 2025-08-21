@@ -62,7 +62,7 @@ func TestURLNormalizer_Normalize(t *testing.T) {
 
 func TestURLNormalizer_NormalizeBatch(t *testing.T) {
 	normalizer := NewURLNormalizer()
-	
+
 	urls := []string{
 		"HTTP://EXAMPLE.COM/page1",
 		"https://test.com:443/page2",
@@ -230,7 +230,7 @@ func TestURLDeduplicator(t *testing.T) {
 
 	// Add URL1
 	dedup.AddURL(url1)
-	
+
 	// Now URL1 should be a duplicate
 	if !dedup.IsDuplicate(url1) {
 		t.Error("Expected URL1 to be duplicate after adding")
@@ -251,7 +251,7 @@ func TestURLDeduplicator(t *testing.T) {
 	}
 
 	dedup.AddContentHash(hash1, url1)
-	
+
 	isDup, existingURL = dedup.IsContentDuplicate(hash1)
 	if !isDup || existingURL != url1 {
 		t.Errorf("Expected hash1 to be duplicate with URL %s, got %s", url1, existingURL)
@@ -347,7 +347,7 @@ func TestExtractTLD(t *testing.T) {
 
 func TestGetDomainInfo(t *testing.T) {
 	url := "http://api.example.com/data"
-	
+
 	domainInfo, err := GetDomainInfo(url)
 	if err != nil {
 		t.Fatalf("GetDomainInfo() error = %v", err)
@@ -455,7 +455,7 @@ func TestURLProcessor_Process(t *testing.T) {
 				t.Errorf("Process() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if !tt.wantErr && tt.checkFunc != nil {
 				if !tt.checkFunc(result) {
 					t.Errorf("Process() result validation failed for %s", tt.url)
@@ -467,7 +467,7 @@ func TestURLProcessor_Process(t *testing.T) {
 
 func TestURLProcessor_GetStatistics(t *testing.T) {
 	processor := NewURLProcessor()
-	
+
 	// Process some URLs to generate statistics
 	processor.Process("http://example.com/page1")
 	processor.Process("http://example.com/page2")
@@ -611,7 +611,7 @@ func TestCountPathSegments(t *testing.T) {
 func BenchmarkURLNormalizer_Normalize(b *testing.B) {
 	normalizer := NewURLNormalizer()
 	url := "HTTP://EXAMPLE.COM/Path/../Page?z=3&a=1&b=2&utm_source=test#fragment"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		normalizer.Normalize(url)
@@ -620,7 +620,7 @@ func BenchmarkURLNormalizer_Normalize(b *testing.B) {
 
 func BenchmarkURLProcessor_Process(b *testing.B) {
 	processor := NewURLProcessor()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		url := "http://example.com/page" + string(rune(i))
@@ -630,7 +630,7 @@ func BenchmarkURLProcessor_Process(b *testing.B) {
 
 func BenchmarkCalculateSimhash(b *testing.B) {
 	content := "This is a test document with some words that we want to hash using simhash algorithm for similarity detection"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		CalculateSimhash(content)

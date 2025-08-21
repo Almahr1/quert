@@ -63,8 +63,9 @@ git checkout -b your-feature-name
 
 3. Test if you can:
 ```bash
-make test    # Run tests
-make fmt     # Format code
+go fmt ./...      # Format all Go files in project
+go build ./...    # Build all packages in project
+go test ./...     # Test all packages in project. Use -v to see all individual tests 
 ```
 
 4. Commit and push:
