@@ -222,7 +222,6 @@ type FeatureConfig struct {
 func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 	v := viper.New()
 
-	// Set default values first
 	setDefaults(v)
 
 	// Set up configuration file paths

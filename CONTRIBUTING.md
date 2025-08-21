@@ -65,7 +65,7 @@ git checkout -b your-feature-name
 ```bash
 go fmt ./...      # Format all Go files in project
 go build ./...    # Build all packages in project
-go test ./...     # Test all packages in project. Use -v to see all individual tests 
+go test ./...     # Test all packages in project. Use -v to see all individual testsz 
 ```
 
 4. Commit and push:
