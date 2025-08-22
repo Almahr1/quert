@@ -974,43 +974,102 @@ func CalculateContentHash(content []byte) string {
 }
 
 func CalculateSimhash(content string) uint64 {
-	// Simple simhash implementation for demonstration
-	// In production, you'd want a more sophisticated implementation
-	// using shingling and proper hash functions
+	if content == "" {
+		return 0
+	}
 
-	var hash uint64
-	wordCounts := make(map[string]int)
+	// Generate shingles (n-grams) from the content
+	shingles := generateShingles(content, 3) // 3-grams
 
-	// Simple word tokenization
-	words := strings.Fields(strings.ToLower(content))
-	for _, word := range words {
-		// Clean word (remove punctuation)
-		cleaned := regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(word, "")
-		if len(cleaned) > 2 { // Skip very short words
-			wordCounts[cleaned]++
+	// Initialize feature vector for 64-bit simhash
+	var features [64]int
+
+	// Process each shingle
+	for _, shingle := range shingles {
+		// Hash the shingle to get a 64-bit hash
+		hash := hashShingle(shingle)
+
+		// For each bit in the hash, update the feature vector
+		for i := 0; i < 64; i++ {
+			bit := (hash >> i) & 1
+			if bit == 1 {
+				features[i]++
+			} else {
+				features[i]--
+			}
 		}
 	}
 
-	// Simple hash calculation based on word frequencies
-	for word, count := range wordCounts {
-		wordHash := sha256.Sum256([]byte(word))
-		// Use first 8 bytes as uint64
-		var wordHashUint64 uint64
-		for i := 0; i < 8; i++ {
-			wordHashUint64 = (wordHashUint64 << 8) | uint64(wordHash[i])
+	// Convert feature vector to final simhash
+	var simhash uint64
+	for i := 0; i < 64; i++ {
+		if features[i] > 0 {
+			simhash |= (1 << i)
 		}
+	}
 
-		// Weight by frequency and XOR into final hash
-		for i := 0; i < count && i < 10; i++ { // Cap influence of very frequent words
-			hash ^= wordHashUint64
-		}
+	return simhash
+}
+
+// generateShingles creates n-grams from the input text
+func generateShingles(text string, n int) []string {
+	if len(text) < n {
+		return []string{text}
+	}
+
+	// Normalize text: lowercase, remove extra whitespace
+	text = strings.ToLower(text)
+	text = strings.Join(strings.Fields(text), " ")
+
+	// Generate character-level n-grams
+	var shingles []string
+	runes := []rune(text)
+
+	for i := 0; i <= len(runes)-n; i++ {
+		shingle := string(runes[i : i+n])
+		shingles = append(shingles, shingle)
+	}
+
+	// Remove duplicates to avoid bias
+	return removeDuplicateShingles(shingles)
+}
+
+// hashShingle creates a 64-bit hash for a shingle using FNV-1a
+func hashShingle(shingle string) uint64 {
+	const (
+		fnvOffsetBasis uint64 = 14695981039346656037
+		fnvPrime       uint64 = 1099511628211
+	)
+
+	hash := fnvOffsetBasis
+	for _, b := range []byte(shingle) {
+		hash ^= uint64(b)
+		hash *= fnvPrime
 	}
 
 	return hash
 }
 
+// removeDuplicateShingles removes duplicate shingles while preserving order
+func removeDuplicateShingles(shingles []string) []string {
+	if len(shingles) == 0 {
+		return []string{}
+	}
+
+	seen := make(map[string]bool)
+	var unique []string
+
+	for _, shingle := range shingles {
+		if !seen[shingle] {
+			seen[shingle] = true
+			unique = append(unique, shingle)
+		}
+	}
+
+	return unique
+}
+
 func HammingDistance(hash1, hash2 uint64) int {
-	// XOR the two hashes to find differing bits
 	xor := hash1 ^ hash2
 
 	// Count the number of 1 bits (differing bits)

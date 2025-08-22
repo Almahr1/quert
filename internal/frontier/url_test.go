@@ -3,6 +3,8 @@ package frontier
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestURLNormalizer_Normalize(t *testing.T) {
@@ -516,22 +518,161 @@ func TestCalculateContentHash(t *testing.T) {
 }
 
 func TestCalculateSimhash(t *testing.T) {
-	content1 := "This is a test document with some words"
-	content2 := "This is a test document with some words" // Identical content
-	content3 := "Completely different content altogether"
-
-	hash1 := CalculateSimhash(content1)
-	hash2 := CalculateSimhash(content2)
-	hash3 := CalculateSimhash(content3)
-
-	// Identical content should produce identical hashes
-	if hash1 != hash2 {
-		t.Error("Expected identical content to produce identical hashes")
+	tests := []struct {
+		name     string
+		content1 string
+		content2 string
+		similar  bool
+	}{
+		{
+			name:     "identical content",
+			content1: "This is a test document with some words",
+			content2: "This is a test document with some words",
+			similar:  true,
+		},
+		{
+			name:     "similar content with minor changes",
+			content1: "This is a test document with some words",
+			content2: "This is a test document with some different words",
+			similar:  true, // Should be similar due to shingling
+		},
+		{
+			name:     "reordered words",
+			content1: "apple banana cherry",
+			content2: "cherry banana apple",
+			similar:  false, // Character n-grams will be different
+		},
+		{
+			name:     "completely different content",
+			content1: "This is a test document with some words",
+			content2: "Completely different content altogether here",
+			similar:  false,
+		},
+		{
+			name:     "empty content",
+			content1: "",
+			content2: "",
+			similar:  true,
+		},
+		{
+			name:     "case differences",
+			content1: "Hello World",
+			content2: "HELLO WORLD",
+			similar:  true, // Should be identical after normalization
+		},
 	}
 
-	// Different content should produce different hashes
-	if hash1 == hash3 {
-		t.Error("Expected different content to produce different hashes")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash1 := CalculateSimhash(tt.content1)
+			hash2 := CalculateSimhash(tt.content2)
+
+			if tt.similar {
+				if tt.content1 == tt.content2 {
+					// Identical content should produce identical hashes
+					assert.Equal(t, hash1, hash2, "Expected identical content to produce identical hashes")
+				} else {
+					// Similar content should have low Hamming distance
+					distance := HammingDistance(hash1, hash2)
+					assert.LessOrEqual(t, distance, 10, "Expected similar content to have low Hamming distance, got %d", distance)
+				}
+			} else {
+				// Different content should produce different hashes
+				assert.NotEqual(t, hash1, hash2, "Expected different content to produce different hashes")
+			}
+		})
+	}
+}
+
+func TestGenerateShingles(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		n        int
+		expected []string
+	}{
+		{
+			name:     "basic 3-grams",
+			text:     "hello",
+			n:        3,
+			expected: []string{"hel", "ell", "llo"},
+		},
+		{
+			name:     "text shorter than n",
+			text:     "hi",
+			n:        3,
+			expected: []string{"hi"},
+		},
+		{
+			name:     "with spaces normalized",
+			text:     "hello  world",
+			n:        3,
+			expected: []string{"hel", "ell", "llo", "lo ", "o w", " wo", "wor", "orl", "rld"},
+		},
+		{
+			name:     "case normalization",
+			text:     "HeLLo",
+			n:        3,
+			expected: []string{"hel", "ell", "llo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generateShingles(tt.text, tt.n)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestHashShingle(t *testing.T) {
+	// Test that same shingle produces same hash
+	shingle1 := "abc"
+	shingle2 := "abc"
+	shingle3 := "def"
+
+	hash1 := hashShingle(shingle1)
+	hash2 := hashShingle(shingle2)
+	hash3 := hashShingle(shingle3)
+
+	assert.Equal(t, hash1, hash2, "Same shingle should produce same hash")
+	assert.NotEqual(t, hash1, hash3, "Different shingles should produce different hashes")
+	assert.NotZero(t, hash1, "Hash should not be zero for non-empty shingle")
+}
+
+func TestRemoveDuplicateShingles(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{
+			name:     "no duplicates",
+			input:    []string{"abc", "def", "ghi"},
+			expected: []string{"abc", "def", "ghi"},
+		},
+		{
+			name:     "with duplicates",
+			input:    []string{"abc", "def", "abc", "ghi", "def"},
+			expected: []string{"abc", "def", "ghi"},
+		},
+		{
+			name:     "empty input",
+			input:    []string{},
+			expected: []string{},
+		},
+		{
+			name:     "all duplicates",
+			input:    []string{"abc", "abc", "abc"},
+			expected: []string{"abc"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := removeDuplicateShingles(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
 	}
 }
 

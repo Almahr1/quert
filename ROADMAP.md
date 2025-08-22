@@ -337,6 +337,9 @@ func (m *MockStorage) Store(content Content) error {
 
 ## Implementation Checklist
 
+**This is a regular pace estimate, assuming I spend a sustainable time working on the project daily**
+**Currently I'm working at an unsustainable pace to build as much core functionality as I can before school**
+
 ### ✅ **COMPLETED - Foundation Phase (Days 1-3)**
 
 #### Environment Setup
@@ -383,12 +386,12 @@ func (m *MockStorage) Store(content Content) error {
 ### 🚀 **CURRENT - Core Crawler Phase (Days 4-7)**
 
 #### Robots.txt Handler
-- [ ] Install robots parser: `go get github.com/temoto/robotstxt`
-- [ ] Create `internal/robots/parser.go`
-- [ ] Implement robots.txt fetching and caching
-- [ ] Add URL permission checking logic
-- [ ] Set up 24-hour cache expiration
-- [ ] Write tests with mock robots.txt files
+- [x] Install robots parser: `go get github.com/temoto/robotstxt`
+- [x] Create `internal/robots/parser.go`
+- [x] Implement robots.txt fetching and caching
+- [x] Add URL permission checking logic
+- [x] Set up 24-hour cache expiration
+- [x] Write tests with mock robots.txt files
 
 #### Worker Pool Implementation
 - [ ] Create `internal/crawler/worker.go`
