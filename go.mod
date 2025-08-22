@@ -1,6 +1,6 @@
 module github.com/Almahr1/quert
 
-go 1.21.0
+go 1.23.0
 
 toolchain go1.24.6
 
@@ -26,5 +26,6 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
