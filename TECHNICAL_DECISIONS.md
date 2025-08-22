@@ -11,7 +11,7 @@ This document chronicles the key technical decisions made during implementation,
 ### Choice: Viper Configuration Management
 **Alternatives Considered**: Custom config parser, standard library flag + env parsing
 
-**Actual Implementation**:
+**Slightly Simplified Implementation**:
 ```go
 type Config struct {
     Crawler    CrawlerConfig    `mapstructure:"crawler" yaml:"crawler" json:"crawler"`
@@ -60,7 +60,7 @@ func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 - **Environment variable mapping**: Automatic CRAWLER_ prefix with dot-to-underscore conversion
 - **Proven reliability**: Well-established in Go ecosystem with extensive community usage
 
-**Implementation Complexity**: The actual config system supports 11 major configuration sections with over 70 individual settings, requiring extensive validation and environment variable mapping.
+**Implementation Complexity**: The actual config system supports 11 major configuration sections with over 70 individual settings, comprehensive validation with detailed error messages, and extensive environment variable mapping with automatic key transformation.
 
 ---
 
@@ -177,8 +177,9 @@ func chainMiddleware(middleware []Middleware, base http.RoundTripper) http.Round
         next:       base,
     }
     
+    // Wrap each middleware around the previous result
     for i := len(middleware) - 2; i >= 0; i-- {
-        result = &middlewwareChain{
+        result = &middlewareChain{
             middleware: middleware[i],
             next:       result,
         }
@@ -240,89 +241,216 @@ func buildHTTPClient(cfg *config.HTTPConfig) *http.Client {
 **Actual Implementation**:
 ```go
 type URLNormalizer struct {
-    RemoveFragment    bool
-    SortQueryParams   bool
-    RemoveEmptyParams bool
-    ParamBlacklist    []string
+    RemoveFragments     bool
+    SortQueryParams     bool
+    RemoveDefaultPorts  bool
+    LowercaseHost       bool
+    RemoveEmptyParams   bool
+    DecodeUnreserved    bool
+    RemoveTrailingSlash bool
+    ParamWhitelist      []string
+    ParamBlacklist      []string
+    mutex               sync.RWMutex
 }
 
-func (n *URLNormalizer) Canonicalize(rawURL string) (string, error) {
-    parsedURL, err := url.Parse(rawURL)
+func (n *URLNormalizer) Normalize(rawURL string) (string, error) {
+    n.mutex.RLock()
+    defer n.mutex.RUnlock()
+
+    u, err := url.Parse(rawURL)
     if err != nil {
-        return "", fmt.Errorf("failed to parse URL: %w", err)
+        return "", err
     }
-    
-    // 1. Normalize scheme and host
-    parsedURL.Scheme = strings.ToLower(parsedURL.Scheme)
-    parsedURL.Host = n.NormalizeHost(parsedURL.Host)
-    
-    // 2. Normalize path
-    parsedURL.Path = n.NormalizePath(parsedURL.Path)
-    
-    // 3. Normalize query parameters
-    parsedURL.RawQuery = n.NormalizeQuery(parsedURL.RawQuery)
-    
-    // 4. Remove fragment if configured
-    if n.RemoveFragment {
-        parsedURL.Fragment = ""
+
+    // 1. Case normalization (lowercase host)
+    if n.LowercaseHost {
+        u.Host = strings.ToLower(u.Host)
     }
-    
-    return parsedURL.String(), nil
+
+    // 2. Default port removal
+    if n.RemoveDefaultPorts {
+        if (u.Scheme == "http" && strings.HasSuffix(u.Host, ":80")) ||
+            (u.Scheme == "https" && strings.HasSuffix(u.Host, ":443")) {
+            hostParts := strings.Split(u.Host, ":")
+            u.Host = hostParts[0]
+        }
+    }
+
+    // 3. Path normalization (resolve . and ..)
+    if u.Path != "" {
+        u.Path = path.Clean(u.Path)
+    }
+
+    // 4. Query parameter processing
+    q := u.Query()
+    if len(q) > 0 {
+        newQ := url.Values{}
+
+        // Apply parameter filtering
+        for k, values := range q {
+            // Skip if in blacklist
+            skip := false
+            for _, blocked := range n.ParamBlacklist {
+                if k == blocked {
+                    skip = true
+                    break
+                }
+            }
+            if skip {
+                continue
+            }
+
+            // Skip if whitelist exists and param not in it
+            if len(n.ParamWhitelist) > 0 {
+                allowed := false
+                for _, allowed_param := range n.ParamWhitelist {
+                    if k == allowed_param {
+                        allowed = true
+                        break
+                    }
+                }
+                if !allowed {
+                    continue
+                }
+            }
+
+            // Filter empty values if configured
+            for _, v := range values {
+                if n.RemoveEmptyParams && v == "" {
+                    continue
+                }
+                newQ.Add(k, v)
+            }
+        }
+
+        // Sort parameters if configured
+        if n.SortQueryParams && len(newQ) > 0 {
+            keys := make([]string, 0, len(newQ))
+            for k := range newQ {
+                keys = append(keys, k)
+            }
+            sort.Strings(keys)
+
+            sortedQ := url.Values{}
+            for _, k := range keys {
+                values := newQ[k]
+                sort.Strings(values)
+                for _, v := range values {
+                    sortedQ.Add(k, v)
+                }
+            }
+            u.RawQuery = sortedQ.Encode()
+        } else {
+            u.RawQuery = newQ.Encode()
+        }
+    }
+
+    // 5. Fragment removal
+    if n.RemoveFragments {
+        u.Fragment = ""
+    }
+
+    // 6. Trailing slash handling
+    if n.RemoveTrailingSlash && len(u.Path) > 1 && strings.HasSuffix(u.Path, "/") {
+        u.Path = strings.TrimSuffix(u.Path, "/")
+    }
+
+    return u.String(), nil
 }
 
 func (n *URLNormalizer) NormalizeHost(host string) string {
+    n.mutex.RLock()
+    defer n.mutex.RUnlock()
+
     if host == "" {
         return host
     }
-    return strings.ToLower(strings.TrimSpace(host))
+
+    // Normalize case
+    if n.LowercaseHost {
+        host = normalizeHost(host)
+    }
+
+    return host
 }
 
 func (n *URLNormalizer) NormalizePath(inputPath string) string {
+    n.mutex.RLock()
+    defer n.mutex.RUnlock()
+
     if inputPath == "" {
-        return "/"
+        return inputPath
     }
-    
-    // Use path.Clean for . and .. resolution
-    cleaned := path.Clean(inputPath)
-    
-    // Ensure leading slash
-    if !strings.HasPrefix(cleaned, "/") {
-        cleaned = "/" + cleaned
+
+    // Clean path to resolve . and .. and remove double slashes
+    cleanPath := path.Clean(inputPath)
+
+    // Handle trailing slash based on configuration
+    if n.RemoveTrailingSlash && len(cleanPath) > 1 && strings.HasSuffix(cleanPath, "/") {
+        cleanPath = strings.TrimSuffix(cleanPath, "/")
     }
-    
-    return cleaned
+
+    return cleanPath
 }
 
-func (n *URLNormalizer) NormalizeQuery(rawQuery string) string {
-    if rawQuery == "" {
-        return ""
+func (n *URLNormalizer) NormalizeQuery(query string) string {
+    n.mutex.RLock()
+    defer n.mutex.RUnlock()
+
+    if query == "" {
+        return query
     }
-    
-    values, err := url.ParseQuery(rawQuery)
+
+    values, err := url.ParseQuery(query)
     if err != nil {
-        return rawQuery
+        return query // Return original if can't parse
     }
-    
-    // Remove blacklisted parameters (UTM, tracking, etc.)
-    for _, param := range n.ParamBlacklist {
-        values.Del(param)
-    }
-    
-    // Remove empty parameters
-    if n.RemoveEmptyParams {
-        for key, vals := range values {
-            if len(vals) == 0 || (len(vals) == 1 && vals[0] == "") {
-                values.Del(key)
+
+    newValues := url.Values{}
+
+    // Apply parameter filtering
+    for k, vals := range values {
+        // Skip if in blacklist
+        skip := false
+        for _, blocked := range n.ParamBlacklist {
+            if k == blocked {
+                skip = true
+                break
             }
         }
+        if skip {
+            continue
+        }
+
+        // Skip if whitelist exists and param not in it
+        if len(n.ParamWhitelist) > 0 {
+            allowed := false
+            for _, allowedParam := range n.ParamWhitelist {
+                if k == allowedParam {
+                    allowed = true
+                    break
+                }
+            }
+            if !allowed {
+                continue
+            }
+        }
+
+        // Filter empty values if configured
+        for _, v := range vals {
+            if n.RemoveEmptyParams && v == "" {
+                continue
+            }
+            newValues.Add(k, v)
+        }
     }
-    
-    // Sort parameters for consistent representation
+
+    // Sort parameters if configured
     if n.SortQueryParams {
-        return values.Encode()
+        return SortQueryParams(newValues.Encode())
     }
-    
-    return values.Encode()
+
+    return newValues.Encode()
 }
 ```
 
@@ -338,74 +466,74 @@ func (n *URLNormalizer) NormalizeQuery(rawQuery string) string {
 **Actual Implementation**:
 ```go
 type URLDeduplicator struct {
-    urlSeen         map[string]struct{}
-    contentHashes   map[string]struct{}
-    simhashes       map[uint64]struct{}
-    semanticHashes  map[string]struct{}
-    mutex           sync.RWMutex
+    urlSeen        map[string]struct{} // Simple map for now, bloom filter later
+    contentHashes  map[string]string   // SHA-256 hash -> URL
+    simhashes      map[uint64]string   // Simhash -> URL
+    semanticHashes map[string]string   // Embedding hash -> URL
+    mutex          sync.RWMutex
 }
 
 func NewURLDeduplicator() *URLDeduplicator {
     return &URLDeduplicator{
-        urlSeen:         make(map[string]struct{}),
-        contentHashes:   make(map[string]struct{}),
-        simhashes:       make(map[uint64]struct{}),
-        semanticHashes:  make(map[string]struct{}),
+        urlSeen:        make(map[string]struct{}),
+        contentHashes:  make(map[string]string),
+        simhashes:      make(map[uint64]string),
+        semanticHashes: make(map[string]string),
+        mutex:          sync.RWMutex{},
     }
 }
 
 // Level 1: Exact URL Matching
-func (d *URLDeduplicator) IsDuplicate(rawURL string) bool {
+func (d *URLDeduplicator) IsDuplicate(url string) bool {
     d.mutex.RLock()
     defer d.mutex.RUnlock()
-    _, exists := d.urlSeen[rawURL]
+
+    _, exists := d.urlSeen[url]
     return exists
 }
 
-func (d *URLDeduplicator) MarkAsSeen(rawURL string) {
+func (d *URLDeduplicator) AddURL(url string) {
     d.mutex.Lock()
     defer d.mutex.Unlock()
-    d.urlSeen[rawURL] = struct{}{}
+
+    d.urlSeen[url] = struct{}{}
 }
 
 // Level 2: Content Hash Matching
-func (d *URLDeduplicator) IsContentDuplicate(content string) bool {
+func (d *URLDeduplicator) IsContentDuplicate(contentHash string) (bool, string) {
     d.mutex.RLock()
     defer d.mutex.RUnlock()
-    
-    hash := CalculateContentHash(content)
-    _, exists := d.contentHashes[hash]
-    return exists
+
+    if existingURL, exists := d.contentHashes[contentHash]; exists {
+        return true, existingURL
+    }
+    return false, ""
 }
 
-func (d *URLDeduplicator) MarkContentAsSeen(content string) {
+func (d *URLDeduplicator) AddContentHash(hash, url string) {
     d.mutex.Lock()
     defer d.mutex.Unlock()
-    
-    hash := CalculateContentHash(content)
-    d.contentHashes[hash] = struct{}{}
+
+    d.contentHashes[hash] = url
 }
 
-func CalculateContentHash(content string) string {
-    hash := sha256.Sum256([]byte(content))
+func CalculateContentHash(content []byte) string {
+    hash := sha256.Sum256(content)
     return fmt.Sprintf("%x", hash)
 }
 
 // Level 3: Simhash Near-Duplicate Detection
-func (d *URLDeduplicator) IsNearDuplicate(content string) bool {
+func (d *URLDeduplicator) IsSimilar(simhash uint64, threshold int) (bool, string) {
     d.mutex.RLock()
     defer d.mutex.RUnlock()
-    
-    simhash := CalculateSimhash(content)
-    
-    // Check for similar hashes (Hamming distance <= 3)
-    for existingHash := range d.simhashes {
-        if hammingDistance(simhash, existingHash) <= 3 {
-            return true
+
+    for existingHash, url := range d.simhashes {
+        distance := HammingDistance(simhash, existingHash)
+        if distance <= threshold {
+            return true, url
         }
     }
-    
-    return false
+    return false, ""
 }
 
 func CalculateSimhash(content string) uint64 {
@@ -425,33 +553,36 @@ func CalculateSimhash(content string) uint64 {
     return result
 }
 
-func hammingDistance(a, b uint64) int {
-    xor := a ^ b
-    distance := 0
-    
+func HammingDistance(hash1, hash2 uint64) int {
+    // XOR the two hashes to find differing bits
+    xor := hash1 ^ hash2
+
+    // Count the number of 1 bits (differing bits)
+    count := 0
     for xor != 0 {
-        distance += int(xor & 1)
+        count += int(xor & 1)
         xor >>= 1
     }
-    
-    return distance
+
+    return count
 }
 
 // Level 4: Semantic Deduplication (Framework ready)
-func (d *URLDeduplicator) IsSemanticDuplicate(content string) bool {
+func (d *URLDeduplicator) IsSemanticallyDuplicate(embeddingHash string) (bool, string) {
     d.mutex.RLock()
     defer d.mutex.RUnlock()
-    
-    // Placeholder for embedding-based similarity
-    // Would integrate with sentence transformers or similar
-    semanticHash := calculateSemanticHash(content)
-    _, exists := d.semanticHashes[semanticHash]
-    return exists
+
+    if existingURL, exists := d.semanticHashes[embeddingHash]; exists {
+        return true, existingURL
+    }
+    return false, ""
 }
 
-func calculateSemanticHash(content string) string {
-    // Placeholder - would use actual embedding model
-    return fmt.Sprintf("semantic_%d", len(content))
+func (d *URLDeduplicator) AddSemanticHash(hash, url string) {
+    d.mutex.Lock()
+    defer d.mutex.Unlock()
+
+    d.semanticHashes[hash] = url
 }
 ```
 
@@ -472,101 +603,138 @@ type URLValidator struct {
     BlockedDomains      []string
     AllowedContentTypes []string
     BlockedContentTypes []string
-    IncludePatterns     []*regexp.Regexp
-    ExcludePatterns     []*regexp.Regexp
+    IncludePatterns     []string
+    ExcludePatterns     []string
+    AllowedExtensions   []string
+    BlockedExtensions   []string
+    MaxURLLength        int
+    MaxPathDepth        int
+    mutex               sync.RWMutex
 }
 
-func (v *URLValidator) IsValid(rawURL string) bool {
-    parsedURL, err := url.Parse(rawURL)
+func (v *URLValidator) IsValid(urlInfo *URLInfo) bool {
+    v.mutex.RLock()
+    defer v.mutex.RUnlock()
+
+    if urlInfo == nil || urlInfo.URL == "" {
+        return false
+    }
+
+    u, err := url.Parse(urlInfo.URL)
     if err != nil {
         return false
     }
-    
+
     // 1. Scheme validation
-    if !v.ValidateScheme(parsedURL.Scheme) {
+    if !v.ValidateScheme(u.Scheme) {
         return false
     }
-    
-    // 2. Domain validation
-    if !v.ValidateDomain(parsedURL.Host) {
+
+    // 2. Domain filtering
+    if !v.ValidateDomain(u.Host) {
         return false
     }
-    
-    // 3. Pattern validation
-    if !v.ValidatePatterns(rawURL) {
+
+    // 3. Content type filtering
+    if urlInfo.ContentType != "" && !v.ValidateContentType(urlInfo.ContentType) {
         return false
     }
-    
+
+    // 4. Pattern matching
+    if !v.ValidatePatterns(urlInfo.URL) {
+        return false
+    }
+
+    // 5. Extension filtering
+    if !v.ValidateExtension(urlInfo.URL) {
+        return false
+    }
+
+    // 6. Length and depth limits
+    if !v.ValidateLength(urlInfo.URL) || !v.ValidateDepth(urlInfo.URL) {
+        return false
+    }
+
     return true
 }
 
 func (v *URLValidator) ValidateScheme(scheme string) bool {
+    v.mutex.RLock()
+    defer v.mutex.RUnlock()
+
     if len(v.AllowedSchemes) == 0 {
-        // Default: only allow HTTP and HTTPS
-        return scheme == "http" || scheme == "https"
+        return true // No restrictions
     }
-    
+
     for _, allowed := range v.AllowedSchemes {
-        if scheme == allowed {
+        if strings.EqualFold(scheme, allowed) {
             return true
         }
     }
-    
+
     return false
 }
 
 func (v *URLValidator) ValidateDomain(domain string) bool {
-    // Remove port if present for consistent comparison
+    v.mutex.RLock()
+    defer v.mutex.RUnlock()
+
+    if domain == "" {
+        return false
+    }
+
+    // Remove port if present
     host := domain
     if strings.Contains(host, ":") {
         hostParts := strings.Split(host, ":")
         host = hostParts[0]
     }
-    
-    // Check blocked domains first (security and efficiency)
+
+    // Check blocked domains first
     for _, blocked := range v.BlockedDomains {
-        if strings.EqualFold(host, blocked) || 
-           strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(blocked)) {
+        if strings.EqualFold(host, blocked) || strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(blocked)) {
             return false
         }
     }
-    
-    // Allow all if no restrictions specified
+
+    // If no allowed domains specified, allow all (except blocked)
     if len(v.AllowedDomains) == 0 {
         return true
     }
-    
-    // Check against allowed domains with subdomain support
+
+    // Check if domain matches allowed list
     for _, allowed := range v.AllowedDomains {
-        if strings.EqualFold(host, allowed) || 
-           strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(allowed)) {
+        if strings.EqualFold(host, allowed) || strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(allowed)) {
             return true
         }
     }
-    
+
     return false
 }
 
-func (v *URLValidator) ValidatePatterns(rawURL string) bool {
+func (v *URLValidator) ValidatePatterns(url string) bool {
+    v.mutex.RLock()
+    defer v.mutex.RUnlock()
+
     // Check exclude patterns first
     for _, pattern := range v.ExcludePatterns {
-        if pattern.MatchString(rawURL) {
+        if matched, _ := regexp.MatchString(pattern, url); matched {
             return false
         }
     }
-    
-    // If no include patterns specified, allow all (that passed exclude)
+
+    // If no include patterns specified, allow all (except excluded)
     if len(v.IncludePatterns) == 0 {
         return true
     }
-    
-    // Check include patterns
+
+    // Check if URL matches any include pattern
     for _, pattern := range v.IncludePatterns {
-        if pattern.MatchString(rawURL) {
+        if matched, _ := regexp.MatchString(pattern, url); matched {
             return true
         }
     }
-    
+
     return false
 }
 ```
@@ -579,80 +747,92 @@ func (v *URLValidator) ValidatePatterns(rawURL string) bool {
 **Actual Implementation**:
 ```go
 type URLProcessor struct {
-    normalizer   *URLNormalizer
-    validator    *URLValidator
-    deduplicator *URLDeduplicator
-    
-    // Statistics
-    processedCount int
-    validCount     int
-    duplicateCount int
-    invalidCount   int
-    
-    mutex sync.Mutex
+    normalizer     *URLNormalizer
+    validator      *URLValidator
+    deduplicator   *URLDeduplicator
+    processedCount uint64
+    validCount     uint64
+    duplicateCount uint64
+    invalidCount   uint64
+    mutex          sync.RWMutex
 }
 
 func (p *URLProcessor) Process(rawURL string) (*URLInfo, error) {
     p.mutex.Lock()
     defer p.mutex.Unlock()
-    
+
     p.processedCount++
-    
+
     // 1. Normalize URL
-    normalizedURL, err := p.normalizer.Canonicalize(rawURL)
+    normalizedURL, err := p.normalizer.Normalize(rawURL)
     if err != nil {
         p.invalidCount++
-        return nil, fmt.Errorf("failed to normalize URL %q: %w", rawURL, err)
+        return nil, fmt.Errorf("failed to normalize URL: %w", err)
     }
-    
-    // 2. Check for duplicates
+
+    // 2. Check for duplicates (Level 1: URL deduplication)
     if p.deduplicator.IsDuplicate(normalizedURL) {
         p.duplicateCount++
         return nil, fmt.Errorf("URL already processed: %s", normalizedURL)
     }
-    
-    // 3. Validate URL
-    if !p.validator.IsValid(normalizedURL) {
-        p.invalidCount++
-        return nil, fmt.Errorf("URL validation failed for %q", normalizedURL)
-    }
-    
-    // 4. Mark as processed
-    p.deduplicator.MarkAsSeen(normalizedURL)
-    p.validCount++
-    
-    // 5. Extract domain information
-    domain := ExtractDomain(normalizedURL)
-    subdomain := ExtractSubdomain(normalizedURL)
-    
+
+    // 3. Extract domain information
+    domain, _ := ExtractDomain(normalizedURL)
+    subdomain, _ := ExtractSubdomain(normalizedURL)
+
+    // 4. Create URLInfo structure
     urlInfo := &URLInfo{
         URL:           normalizedURL,
         OriginalURL:   rawURL,
+        NormalizedURL: normalizedURL,
         Domain:        domain,
         Subdomain:     subdomain,
-        ProcessedAt:   time.Now(),
+        Priority:      0, // Default priority
+        Depth:         0, // Will be set by crawler based on discovery path
+        DiscoveredAt:  time.Now(),
+        LastCrawled:   nil,
+        CrawlCount:    0,
+        Metadata:      make(map[string]string),
     }
-    
+
+    // 5. Validate URL
+    if !p.validator.IsValid(urlInfo) {
+        p.invalidCount++
+        return nil, fmt.Errorf("URL validation failed: %s", normalizedURL)
+    }
+
+    // 6. Add to deduplication tracking
+    p.deduplicator.AddURL(normalizedURL)
+    p.validCount++
+
     return urlInfo, nil
 }
 
 type URLInfo struct {
-    URL         string    `json:"url"`
-    OriginalURL string    `json:"original_url"`
-    Domain      string    `json:"domain"`
-    Subdomain   string    `json:"subdomain"`
-    ProcessedAt time.Time `json:"processed_at"`
+    URL           string            `json:"url"`
+    OriginalURL   string            `json:"original_url"`
+    NormalizedURL string            `json:"normalized_url"`
+    Domain        string            `json:"domain"`
+    Subdomain     string            `json:"subdomain"`
+    Priority      int               `json:"priority"`
+    Depth         int               `json:"depth"`
+    DiscoveredAt  time.Time         `json:"discovered_at"`
+    LastCrawled   *time.Time        `json:"last_crawled,omitempty"`
+    CrawlCount    int               `json:"crawl_count"`
+    Metadata      map[string]string `json:"metadata"`
+    ContentType   string            `json:"content_type,omitempty"`
+    StatusCode    int               `json:"status_code,omitempty"`
 }
 
-func (p *URLProcessor) GetStats() ProcessingStats {
-    p.mutex.Lock()
-    defer p.mutex.Unlock()
-    
-    return ProcessingStats{
-        Processed: p.processedCount,
-        Valid:     p.validCount,
-        Duplicate: p.duplicateCount,
-        Invalid:   p.invalidCount,
+func (p *URLProcessor) GetStatistics() map[string]uint64 {
+    p.mutex.RLock()
+    defer p.mutex.RUnlock()
+
+    return map[string]uint64{
+        "processed_count": p.processedCount,
+        "valid_count":     p.validCount,
+        "duplicate_count": p.duplicateCount,
+        "invalid_count":   p.invalidCount,
     }
 }
 ```
@@ -791,7 +971,7 @@ func (p *URLProcessor) Process(rawURL string) (*URLInfo, error) {
     p.processedCount++
     
     // 1. Normalize URL with detailed error context
-    normalizedURL, err := p.normalizer.Canonicalize(rawURL)
+    normalizedURL, err := p.normalizer.Normalize(rawURL)
     if err != nil {
         p.invalidCount++
         return nil, fmt.Errorf("failed to normalize URL %q: %w", rawURL, err)
@@ -886,10 +1066,11 @@ func isRetryableError(err error, retryableErrors []error) bool {
 - Comprehensive error classification for retry decisions
 
 **URL Processing System** (`internal/frontier/`):
-- Multi-step URL normalization pipeline
+- Multi-step URL normalization pipeline with configurable options
 - Four-level deduplication strategy (URL, content hash, simhash, semantic)
-- Flexible URL validation with domain/pattern filtering
+- Flexible URL validation with domain/pattern/extension filtering
 - Thread-safe design using RWMutex for concurrent access
+- Batch processing capabilities for performance optimization
 - Comprehensive test coverage with table-driven tests
 
 ### Planned Components ⏳
@@ -926,10 +1107,11 @@ func isRetryableError(err error, retryableErrors []error) bool {
 **Implementation Status**: Core components implemented with performance considerations but not yet optimized through real-world testing.
 
 **Expected Performance Characteristics**:
-- **URL Processing**: Sub-millisecond for typical URLs
-- **Network I/O**: Will dominate in real crawling scenarios  
-- **Memory Usage**: Deduplication maps main memory consumers
-- **Concurrency**: Designed for hundreds of concurrent operations
+- **URL Processing**: Sub-millisecond for typical URLs (based on benchmarks)
+- **Network I/O**: Will dominate in real crawling scenarios with configurable timeouts
+- **Memory Usage**: Deduplication maps main memory consumers (planned bloom filter optimization)
+- **Concurrency**: Designed for hundreds of concurrent operations with worker pools
+- **Batch Processing**: 50-100 worker goroutines for batch URL processing
 
 ### Optimization Opportunities Identified
 

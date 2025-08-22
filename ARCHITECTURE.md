@@ -1,5 +1,7 @@
 # Web Crawler - Architecture & Design Decisions
 
+**Mostly Conceptual / Has Real Code**
+
 ## Overview
 
  ***** is a production-grade web crawler built in Go, specifically designed for collecting high-quality text data for LLM training. This document outlines our architectural decisions, implementation choices, and the reasoning behind each component.
@@ -265,7 +267,7 @@ func (p *URLProcessor) ProcessBatch(urls []string) ([]*URLInfo, []error) {
 }
 ```
 
-**Why 50 Workers**: Optimal balance for I/O-bound operations. More workers increase memory usage without proportional performance gains due to network bottlenecks.
+**Why 50 Workers**: Optimal balance for I/O-bound operations. More workers increase memory usage without proportional performance gains due to network bottlenecks. **Claim will be tested**
 
 ### 5. Thread Safety Strategy
 
@@ -536,12 +538,6 @@ var bufferPool = sync.Pool{
 - Integration tests for component interactions
 - Benchmark tests for performance validation
 - Property-based testing for complex algorithms
-
-### Current Test Stats
-- 18 test functions
-- 40+ individual test cases
-- ~90% code coverage
-- Benchmark tests for critical paths
 
 ## Future Architecture Evolution
 
