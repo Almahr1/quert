@@ -1,6 +1,6 @@
-# Go Web Crawler for LLM Training Data Collection
+# Go Web Crawler
 
-A high-performance (hopefully), semi-below-garbage-grade web crawler built in Go designed specifically for collecting and processing text data for Large Language Model training pipelines (mainly).
+A high-performance (hopefully), semi-below-garbage-grade web crawler built in Go designed specifically for collecting and processing text data for Large Language Model training pipelines (among other things).
 
 [![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE)
