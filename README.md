@@ -9,6 +9,10 @@ A high-performance (hopefully), semi-below-garbage-grade web crawler built in Go
 - **Project Status**:
   The project is still in early development, much of the features spoken about here are 
   conceptual and haven't been implemented yet. Bear with us.
+- **RATE LIMITTING**:
+  For the sake of not getting blocked by almost every website
+  please don't use the crawler until I get rate limitting implemented completely.
+
 
 ## Development Transparency
 
