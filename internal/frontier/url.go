@@ -592,7 +592,7 @@ func (v *URLValidator) ValidateExtension(rawURL string) bool {
 	return false
 }
 
-func (v *URLValidator) ValidateLength(url string) bool {
+func (v *URLValidator) ValidateLength(rawURL string) bool {
 	v.mutex.RLock()
 	defer v.mutex.RUnlock()
 
@@ -600,7 +600,7 @@ func (v *URLValidator) ValidateLength(url string) bool {
 		return true // No length restriction
 	}
 
-	return len(url) <= v.MaxURLLength
+	return len(rawURL) <= v.MaxURLLength
 }
 
 func (v *URLValidator) ValidateDepth(rawURL string) bool {
@@ -689,7 +689,9 @@ func (d *URLDeduplicator) AddSemanticHash(hash, url string) {
 	d.semanticHashes[hash] = url
 }
 
-// ExtractHostFromURL extracts the host (domain) from a URL string
+// ExtractHostFromURL extracts the host (domain:port) from a URL string.
+// Returns the full host including port if present (e.g., "example.com:8080").
+// Automatically adds "http://" scheme if missing.
 func ExtractHostFromURL(rawURL string) (string, error) {
 	if !strings.Contains(rawURL, "://") {
 		rawURL = "http://" + rawURL
@@ -708,6 +710,9 @@ func ExtractHostFromURL(rawURL string) (string, error) {
 	return host, nil
 }
 
+// ExtractDomain extracts just the domain name from a URL string.
+// Returns the domain without port (e.g., "example.com" from "https://example.com:8080/path").
+// Requires a properly formatted URL with scheme.
 func ExtractDomain(rawURL string) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {

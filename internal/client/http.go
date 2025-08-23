@@ -96,7 +96,7 @@ func NewHTTPClient(cfg *config.HTTPConfig, logger *zap.Logger) *HTTPClient {
 	}
 	middleware := []Middleware{
 		NewLoggingMiddleware(logger),
-		NewUserAgentMiddleware("Webcralwer/1.0"),
+		NewUserAgentMiddleware("WebCrawler/1.0"),
 	}
 
 	return &HTTPClient{
@@ -341,11 +341,11 @@ func (m *MetricsMiddleware) RoundTrip(req *http.Request, next http.RoundTripper)
 	// TODO: Record metrics here. In a full implementation, you'd update
 	// Prometheus counters, histograms, etc. For example:
 	// - HTTP request total counter by method and status
-	// - Request duration histogram
+	// - Request duration histogram using duration variable
 	// - Response size histogram
 	// - Error rate by type
-
-	_ = duration // Suppress unused variable warning for now
+	
+	_ = duration // Suppress unused variable warning until metrics are implemented
 
 	return resp, err
 }
@@ -428,7 +428,32 @@ func isRetryableError(err error, retryableErrors []error) bool {
 	return false
 }
 
+// Pre-built map of default retryable status codes for efficiency
+var defaultRetryableStatusCodes = map[int]struct{}{
+	429: {}, // Too Many Requests
+	500: {}, // Internal Server Error
+	502: {}, // Bad Gateway
+	503: {}, // Service Unavailable
+	504: {}, // Gateway Timeout
+}
+
 func isRetryableStatus(statusCode int, retryableStatus []int) bool {
+	// Use pre-built map if using default retryable status codes
+	if len(retryableStatus) == 5 {
+		isDefault := true
+		for _, code := range retryableStatus {
+			if _, exists := defaultRetryableStatusCodes[code]; !exists {
+				isDefault = false
+				break
+			}
+		}
+		if isDefault {
+			_, exists := defaultRetryableStatusCodes[statusCode]
+			return exists
+		}
+	}
+	
+	// Fallback to creating map for custom retryable status codes
 	set := make(map[int]struct{}, len(retryableStatus))
 	for _, code := range retryableStatus {
 		set[code] = struct{}{}
@@ -436,8 +461,6 @@ func isRetryableStatus(statusCode int, retryableStatus []int) bool {
 
 	_, exists := set[statusCode]
 	return exists
-	//Notice: If we're gonna call this function multiple times, we are going to need
-	// to pass a map into the function by default for O(1) lookups without generating a map each time
 }
 
 func buildHTTPClient(cfg *config.HTTPConfig) *http.Client {
