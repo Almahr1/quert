@@ -8,8 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Almahr1/quert/internal/client"
+	"github.com/Almahr1/quert/internal/config"
+	"github.com/Almahr1/quert/internal/frontier"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // Mock robots.txt content for testing
@@ -38,13 +42,31 @@ Allow: /
 )
 
 func createTestParser() *Parser {
-	config := Config{
+	robotsConfig := Config{
 		UserAgent:   "TestCrawler/1.0",
 		CacheTTL:    24 * time.Hour,
 		HTTPTimeout: 5 * time.Second,
 		MaxSize:     500 * 1024, // 500KB
 	}
-	return NewParser(config)
+	
+	// Create HTTP client for testing
+	httpConfig := &config.HTTPConfig{
+		MaxIdleConnections:        100,
+		MaxIdleConnectionsPerHost: 10,
+		IdleConnectionTimeout:     30 * time.Second,
+		DisableKeepAlives:         false,
+		Timeout:                   5 * time.Second,
+		DialTimeout:               3 * time.Second,
+		TLSHandshakeTimeout:       5 * time.Second,
+		ResponseHeaderTimeout:     5 * time.Second,
+		DisableCompression:        false,
+		AcceptEncoding:            "gzip, deflate",
+	}
+	
+	logger, _ := zap.NewDevelopment()
+	httpClient := client.NewHTTPClient(httpConfig, logger)
+	
+	return NewParser(robotsConfig, httpClient)
 }
 
 func TestNewParser(t *testing.T) {
@@ -81,12 +103,18 @@ func TestNewParser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewParser(tt.config)
+			// Create HTTP client for test
+			httpConfig := &config.HTTPConfig{
+				Timeout: tt.expectedTimeout,
+			}
+			logger, _ := zap.NewDevelopment()
+			httpClient := client.NewHTTPClient(httpConfig, logger)
+			
+			parser := NewParser(tt.config, httpClient)
 
 			assert.NotNil(t, parser)
 			assert.Equal(t, tt.expectedUA, parser.userAgent)
 			assert.Equal(t, tt.expectedTTL, parser.cacheTTL)
-			assert.Equal(t, tt.expectedTimeout, parser.client.Timeout)
 			assert.NotNil(t, parser.cache)
 			assert.NotNil(t, parser.fetchMutex)
 		})
@@ -170,12 +198,15 @@ func TestIsAllowed(t *testing.T) {
 			}))
 			defer server.Close()
 
-			config := Config{
+			robotsConfig := Config{
 				UserAgent:   tt.userAgent,
 				CacheTTL:    1 * time.Minute, // Short TTL for testing
 				HTTPTimeout: 5 * time.Second,
 			}
-			parser := NewParser(config)
+			httpConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
+			logger, _ := zap.NewDevelopment()
+			httpClient := client.NewHTTPClient(httpConfig, logger)
+			parser := NewParser(robotsConfig, httpClient)
 
 			testURL := tt.url
 			if testURL != "" {
@@ -295,12 +326,15 @@ func TestCaching(t *testing.T) {
 	defer server.Close()
 
 	// Create parser with short TTL for testing
-	config := Config{
+	robotsConfig := Config{
 		UserAgent:   "TestBot/1.0",
 		CacheTTL:    100 * time.Millisecond,
 		HTTPTimeout: 5 * time.Second,
 	}
-	parser := NewParser(config)
+	httpConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
+	logger, _ := zap.NewDevelopment()
+	httpClient := client.NewHTTPClient(httpConfig, logger)
+	parser := NewParser(robotsConfig, httpClient)
 
 	ctx := context.Background()
 	host := strings.TrimPrefix(server.URL, "http://")
@@ -355,12 +389,15 @@ func TestCacheOperations(t *testing.T) {
 
 func TestClearExpired(t *testing.T) {
 	// Create parser with very short TTL
-	config := Config{
+	robotsConfig := Config{
 		UserAgent:   "TestBot/1.0",
 		CacheTTL:    1 * time.Millisecond,
 		HTTPTimeout: 5 * time.Second,
 	}
-	parser := NewParser(config)
+	httpConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
+	logger, _ := zap.NewDevelopment()
+	httpClient := client.NewHTTPClient(httpConfig, logger)
+	parser := NewParser(robotsConfig, httpClient)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -424,7 +461,7 @@ func TestExtractHostFromURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			host, err := extractHostFromURL(tt.url)
+			host, err := frontier.ExtractHostFromURL(tt.url)
 
 			if tt.wantErr {
 				assert.Error(t, err)

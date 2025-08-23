@@ -83,7 +83,7 @@ type Response struct {
 
 func NewHTTPClient(cfg *config.HTTPConfig, logger *zap.Logger) *HTTPClient {
 	client := buildHTTPClient(cfg)
-	retry_config := RetryConfig{
+	retryConfig := RetryConfig{
 		MaxRetries: 3,
 		BackoffStrategy: &ExponentialBackoff{
 			BaseDelay:  500 * time.Millisecond,
@@ -104,7 +104,7 @@ func NewHTTPClient(cfg *config.HTTPConfig, logger *zap.Logger) *HTTPClient {
 		config:      cfg,
 		logger:      logger,
 		middleware:  middleware,
-		retryConfig: retry_config,
+		retryConfig: retryConfig,
 	}
 }
 

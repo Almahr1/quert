@@ -46,73 +46,73 @@ type CrawlResult struct {
 
 // WorkerStats holds statistics for a worker
 type WorkerStats struct {
-	WorkerID        int
-	JobsProcessed   int64
-	JobsSuccessful  int64
-	JobsFailed      int64
-	TotalTime       time.Duration
-	AverageTime     time.Duration
-	LastJobTime     time.Time
-	IsActive        bool
-	CurrentJob      *CrawlJob
+	WorkerID       int
+	JobsProcessed  int64
+	JobsSuccessful int64
+	JobsFailed     int64
+	TotalTime      time.Duration
+	AverageTime    time.Duration
+	LastJobTime    time.Time
+	IsActive       bool
+	CurrentJob     *CrawlJob
 }
 
 // CrawlerEngine manages the worker pool and job distribution
 type CrawlerEngine struct {
 	// Configuration
-	config       *config.CrawlerConfig
-	httpConfig   *config.HTTPConfig
-	logger       *zap.Logger
-	
+	config     *config.CrawlerConfig
+	httpConfig *config.HTTPConfig
+	logger     *zap.Logger
+
 	// Worker pool management
-	workers      int
-	jobs         chan *CrawlJob
-	results      chan *CrawlResult
-	workerStats  map[int]*WorkerStats
-	statsMutex   sync.RWMutex
-	
+	workers     int
+	jobs        chan *CrawlJob
+	results     chan *CrawlResult
+	workerStats map[int]*WorkerStats
+	statsMutex  sync.RWMutex
+
 	// HTTP and external dependencies
 	httpClient   *client.HTTPClient
 	robotsParser *robots.Parser
-	
+
 	// Rate limiting
 	globalLimiter *rate.Limiter
 	hostLimiters  map[string]*rate.Limiter
 	limiterMutex  sync.RWMutex
-	
+
 	// Lifecycle management
 	ctx          context.Context
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
 	running      bool
 	runningMutex sync.RWMutex
-	
+
 	// Metrics and monitoring
-	totalJobs     int64
-	successfulJobs int64
-	failedJobs    int64
-	startTime     time.Time
+	totalJobs       int64
+	successfulJobs  int64
+	failedJobs      int64
+	startTime       time.Time
 	metricsCallback func(*CrawlerMetrics)
 }
 
 // CrawlerMetrics holds overall crawler performance metrics
 type CrawlerMetrics struct {
-	TotalJobs       int64
-	SuccessfulJobs  int64
-	FailedJobs      int64
-	JobsPerSecond   float64
-	AverageLatency  time.Duration
-	ActiveWorkers   int
-	QueueDepth      int
-	Uptime          time.Duration
-	ErrorRate       float64
+	TotalJobs      int64
+	SuccessfulJobs int64
+	FailedJobs     int64
+	JobsPerSecond  float64
+	AverageLatency time.Duration
+	ActiveWorkers  int
+	QueueDepth     int
+	Uptime         time.Duration
+	ErrorRate      float64
 }
 
 // WorkerConfig holds configuration for individual workers
 type WorkerConfig struct {
-	ID           int
-	RequestTimeout time.Duration
-	RetryAttempts  int
+	ID              int
+	RequestTimeout  time.Duration
+	RetryAttempts   int
 	BackoffStrategy string
 }
 
@@ -129,7 +129,7 @@ func NewCrawlerEngine(cfg *config.CrawlerConfig, httpCfg *config.HTTPConfig, log
 	// 8. Initialize worker statistics tracking
 	// 9. Set up context for graceful shutdown
 	// 10. Return configured CrawlerEngine instance
-	
+
 	return nil
 }
 
@@ -146,7 +146,7 @@ func (c *CrawlerEngine) Start(ctx context.Context) error {
 	// 8. Start rate limiter cleanup goroutine
 	// 9. Log successful startup with worker count
 	// 10. Return nil on success, error on failure
-	
+
 	return nil
 }
 
@@ -163,7 +163,7 @@ func (c *CrawlerEngine) Stop() error {
 	// 8. Clean up rate limiters and release resources
 	// 9. Log shutdown completion with final statistics
 	// 10. Return nil on success, error on timeout
-	
+
 	return nil
 }
 
@@ -180,7 +180,7 @@ func (c *CrawlerEngine) SubmitJob(job *CrawlJob) error {
 	// 8. Increment total jobs counter (thread-safe)
 	// 9. Log job submission with URL and priority
 	// 10. Return nil on success, error on failure or queue full
-	
+
 	return nil
 }
 
@@ -190,7 +190,7 @@ func (c *CrawlerEngine) GetResults() <-chan *CrawlResult {
 	// 1. Check if engine is initialized
 	// 2. Return read-only channel to results
 	// Note: This is a simple getter but important for proper channel access
-	
+
 	return nil
 }
 
@@ -207,7 +207,7 @@ func (c *CrawlerEngine) GetMetrics() *CrawlerMetrics {
 	// 8. Create and populate CrawlerMetrics struct
 	// 9. Release lock and return metrics
 	// 10. Handle edge cases (zero values, division by zero)
-	
+
 	return nil
 }
 
@@ -219,7 +219,7 @@ func (c *CrawlerEngine) GetWorkerStats() map[int]*WorkerStats {
 	// 3. Calculate average times for each worker
 	// 4. Update active status based on current job presence
 	// 5. Release lock and return stats copy
-	
+
 	return nil
 }
 
@@ -229,7 +229,7 @@ func (c *CrawlerEngine) SetMetricsCallback(callback func(*CrawlerMetrics)) {
 	// 1. Store callback function for later use
 	// 2. If engine is running, restart metrics goroutine with new callback
 	// Note: Simple setter but enables monitoring integration
-	
+
 }
 
 // worker is the main worker goroutine function
@@ -245,7 +245,7 @@ func (c *CrawlerEngine) worker(ctx context.Context, workerID int) {
 	// 8. Log worker shutdown when loop exits
 	// 9. Decrement wait group to signal completion
 	// 10. Set worker as inactive in statistics
-	
+
 }
 
 // processJob handles the actual crawling of a single URL
@@ -261,7 +261,7 @@ func (c *CrawlerEngine) processJob(ctx context.Context, job *CrawlJob, workerID 
 	// 8. Extract main text content for LLM training
 	// 9. Create CrawlResult with all collected data
 	// 10. Handle errors and determine if job is retryable
-	
+
 	return nil
 }
 
@@ -278,7 +278,7 @@ func (c *CrawlerEngine) resultProcessor(ctx context.Context) {
 	// 8. Clean up resources associated with completed jobs
 	// 9. Handle context cancellation and drain remaining results
 	// 10. Log processor shutdown when loop exits
-	
+
 }
 
 // metricsCollector periodically collects and reports metrics
@@ -292,7 +292,7 @@ func (c *CrawlerEngine) metricsCollector(ctx context.Context) {
 	// 6. Handle context cancellation gracefully
 	// 7. Stop ticker and clean up resources
 	// 8. Log metrics collector shutdown
-	
+
 }
 
 // getRateLimiter gets or creates a rate limiter for a specific host
@@ -306,7 +306,7 @@ func (c *CrawlerEngine) getRateLimiter(host string) *rate.Limiter {
 	// 6. Store limiter in map for future use
 	// 7. Release lock and return limiter
 	// 8. Handle rate limit configuration from robots.txt crawl-delay
-	
+
 	return nil
 }
 
@@ -321,7 +321,7 @@ func (c *CrawlerEngine) cleanupRateLimiters(ctx context.Context) {
 	// 6. Handle context cancellation gracefully
 	// 7. Stop ticker and clean up resources
 	// 8. Log cleanup goroutine shutdown
-	
+
 }
 
 // isRunning safely checks if the crawler engine is running
@@ -330,7 +330,7 @@ func (c *CrawlerEngine) isRunning() bool {
 	// 1. Acquire read lock for thread safety
 	// 2. Read running status
 	// 3. Release lock and return status
-	
+
 	return false
 }
 
@@ -344,18 +344,5 @@ func (c *CrawlerEngine) updateWorkerStats(workerID int, job *CrawlJob, result *C
 	// 5. Calculate running average of job processing time
 	// 6. Update last job time and current job reference
 	// 7. Release lock after updates complete
-	
-}
 
-// extractHost extracts the host from a URL for rate limiting
-func (c *CrawlerEngine) extractHost(urlStr string) (string, error) {
-	// TODO: Extract host from URL for rate limiting
-	// 1. Parse the URL string
-	// 2. Extract the host component
-	// 3. Handle URLs without schemes (add default http://)
-	// 4. Normalize host (lowercase, remove port for rate limiting)
-	// 5. Validate host is not empty
-	// 6. Return normalized host or error
-	
-	return "", nil
 }

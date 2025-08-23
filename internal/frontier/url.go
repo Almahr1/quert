@@ -172,67 +172,8 @@ func (n *URLNormalizer) Normalize(rawURL string) (string, error) {
 	}
 
 	// 4. Query parameter processing
-	q := u.Query()
-	if len(q) > 0 {
-		newQ := url.Values{}
-
-		// Apply parameter filtering
-		for k, values := range q {
-			// Skip if in blacklist
-			skip := false
-			for _, blocked := range n.ParamBlacklist {
-				if k == blocked {
-					skip = true
-					break
-				}
-			}
-			if skip {
-				continue
-			}
-
-			// Skip if whitelist exists and param not in it
-			if len(n.ParamWhitelist) > 0 {
-				allowed := false
-				for _, allowed_param := range n.ParamWhitelist {
-					if k == allowed_param {
-						allowed = true
-						break
-					}
-				}
-				if !allowed {
-					continue
-				}
-			}
-
-			// Filter empty values if configured
-			for _, v := range values {
-				if n.RemoveEmptyParams && v == "" {
-					continue
-				}
-				newQ.Add(k, v)
-			}
-		}
-
-		// Sort parameters if configured
-		if n.SortQueryParams && len(newQ) > 0 {
-			keys := make([]string, 0, len(newQ))
-			for k := range newQ {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-
-			sortedQ := url.Values{}
-			for _, k := range keys {
-				values := newQ[k]
-				sort.Strings(values)
-				for _, v := range values {
-					sortedQ.Add(k, v)
-				}
-			}
-			u.RawQuery = sortedQ.Encode()
-		} else {
-			u.RawQuery = newQ.Encode()
-		}
+	if u.RawQuery != "" {
+		u.RawQuery = n.processQueryParameters(u.RawQuery)
 	}
 
 	// 5. Fragment removal
@@ -382,6 +323,11 @@ func (n *URLNormalizer) NormalizeQuery(query string) string {
 	n.mutex.RLock()
 	defer n.mutex.RUnlock()
 
+	return n.processQueryParameters(query)
+}
+
+// processQueryParameters is a shared helper for query parameter processing
+func (n *URLNormalizer) processQueryParameters(query string) string {
 	if query == "" {
 		return query
 	}
@@ -741,6 +687,25 @@ func (d *URLDeduplicator) AddSemanticHash(hash, url string) {
 	defer d.mutex.Unlock()
 
 	d.semanticHashes[hash] = url
+}
+
+// ExtractHostFromURL extracts the host (domain) from a URL string
+func ExtractHostFromURL(rawURL string) (string, error) {
+	if !strings.Contains(rawURL, "://") {
+		rawURL = "http://" + rawURL
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %w", err)
+	}
+
+	host := u.Host
+	if host == "" {
+		return "", fmt.Errorf("no host found in URL")
+	}
+
+	return host, nil
 }
 
 func ExtractDomain(rawURL string) (string, error) {

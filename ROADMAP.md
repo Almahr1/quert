@@ -416,8 +416,8 @@ func (m *MockStorage) Store(content Content) error {
 ### 🚀 **CURRENT - Core Crawler Phase (Days 6-7)**
 
 #### Worker Pool Implementation
-- [ ] Create `internal/crawler/worker.go`
-- [ ] Implement worker pool struct with channels
+- [x] Create `internal/crawler/worker.go`
+- [x] Implement worker pool struct with channels
 - [ ] Add job distribution logic
 - [ ] Create result collection mechanism
 - [ ] Implement graceful shutdown with context

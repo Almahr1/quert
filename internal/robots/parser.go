@@ -8,11 +8,12 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Almahr1/quert/internal/client"
+	"github.com/Almahr1/quert/internal/frontier"
 	"github.com/temoto/robotstxt"
 )
 
@@ -25,7 +26,7 @@ type CacheEntry struct {
 
 // Parser handles robots.txt fetching, caching, and permission checking
 type Parser struct {
-	client     *http.Client
+	httpClient *client.HTTPClient
 	cache      map[string]*CacheEntry
 	cacheMutex sync.RWMutex
 	cacheTTL   time.Duration // Time To Live
@@ -59,8 +60,8 @@ type FetchResult struct {
 	FetchTime    time.Duration
 }
 
-// NewParser creates a new robots.txt parser with the given configuration
-func NewParser(config Config) *Parser {
+// NewParser creates a new robots.txt parser with the given configuration and HTTP client
+func NewParser(config Config, httpClient *client.HTTPClient) *Parser {
 	if config.UserAgent == "" {
 		config.UserAgent = "*"
 	}
@@ -74,17 +75,8 @@ func NewParser(config Config) *Parser {
 		config.MaxSize = 500 * 1024 // 500KB
 	}
 
-	client := &http.Client{
-		Timeout: config.HTTPTimeout,
-		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
-		},
-	}
-
 	return &Parser{
-		client:     client,
+		httpClient: httpClient,
 		cache:      make(map[string]*CacheEntry),
 		cacheMutex: sync.RWMutex{},
 		cacheTTL:   config.CacheTTL,
@@ -96,13 +88,13 @@ func NewParser(config Config) *Parser {
 
 // IsAllowed checks if a URL is allowed to be crawled according to robots.txt
 // This is the main function that crawlers will use
-func (p *Parser) IsAllowed(ctx context.Context, urlStr string) (*PermissionResult, error) {
-	if urlStr == "" {
+func (p *Parser) IsAllowed(ctx context.Context, rawURL string) (*PermissionResult, error) {
+	if rawURL == "" {
 		return nil, fmt.Errorf("empty URL provided")
 	}
-	host, err := extractHostFromURL(urlStr)
+	host, err := frontier.ExtractHostFromURL(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract host from URL %q: %w", urlStr, err)
+		return nil, fmt.Errorf("failed to extract host from URL %q: %w", rawURL, err)
 	}
 	robots, err := p.GetRobots(ctx, host)
 	if err != nil {
@@ -114,7 +106,7 @@ func (p *Parser) IsAllowed(ctx context.Context, urlStr string) (*PermissionResul
 			Sitemaps:     []string{},
 		}, nil
 	}
-	allowed := robots.TestAgent(urlStr, p.userAgent)
+	allowed := robots.TestAgent(rawURL, p.userAgent)
 	var crawlDelay time.Duration
 	if group := robots.FindGroup(p.userAgent); group != nil {
 		// CrawlDelay in robotstxt library is time.Duration in nanoseconds
@@ -194,19 +186,9 @@ func (p *Parser) fetchRobotsFromServer(ctx context.Context, host string) (*Fetch
 			FetchTime:    time.Since(start),
 		}, nil
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", robotsURL, nil)
-	if err != nil {
-		return &FetchResult{
-			Success:      false,
-			Robots:       nil,
-			Error:        fmt.Errorf("failed to create request: %w", err),
-			ResponseCode: 0,
-			FetchTime:    time.Since(start),
-		}, nil
-	}
-	req.Header.Set("User-Agent", fmt.Sprintf("Mozilla/5.0 (compatible; %s; +https://github.com/Almahr1/quert)", p.userAgent))
-	req.Header.Set("Accept", "text/plain")
-	resp, err := p.client.Do(req)
+
+	// Use the centralized HTTP client
+	resp, err := p.httpClient.Get(ctx, robotsURL)
 	if err != nil {
 		return &FetchResult{
 			Success:      false,
@@ -390,25 +372,6 @@ type CacheStats struct {
 	AverageAge     time.Duration // Average age of cache entries
 }
 
-// extractHostFromURL extracts the host (domain) from a URL string
-func extractHostFromURL(urlStr string) (string, error) {
-	if !strings.Contains(urlStr, "://") {
-		urlStr = "http://" + urlStr
-	}
-
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL: %w", err)
-	}
-
-	host := u.Host
-	if host == "" {
-		return "", fmt.Errorf("no host found in URL")
-	}
-
-	return host, nil
-}
-
 // buildRobotsURL constructs the robots.txt URL for a given host
 func buildRobotsURL(host string) string {
 	host = strings.TrimSpace(host)
@@ -417,23 +380,26 @@ func buildRobotsURL(host string) string {
 		return ""
 	}
 
+	// Ensure host has a scheme
 	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 		host = "http://" + host
 	}
 
-	u, err := url.Parse(host)
+	// Use frontier URL parsing utilities
+	u, err := frontier.ParseURL(host)
 	if err != nil {
-			if !strings.HasSuffix(host, "/") {
+		// Fallback for invalid URLs
+		if !strings.HasSuffix(host, "/") {
 			host += "/"
 		}
 		return host + "robots.txt"
 	}
+	
 	u.Path = "/robots.txt"
 	u.RawQuery = ""
 	u.Fragment = ""
 
 	return u.String()
-
 }
 
 // parseRobotsContent parses robots.txt content and returns RobotsData
@@ -459,8 +425,8 @@ func parseRobotsContent(content []byte) (*robotstxt.RobotsData, error) {
 // Close gracefully shuts down the parser and cleans up resources
 func (p *Parser) Close() error {
 	p.ClearCache()
-	if transport, ok := p.client.Transport.(*http.Transport); ok {
-		transport.CloseIdleConnections()
+	if p.httpClient != nil {
+		p.httpClient.Close()
 	}
 	p.mutexLock.Lock()
 	p.fetchMutex = make(map[string]*sync.Mutex)
