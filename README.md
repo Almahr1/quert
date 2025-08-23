@@ -257,13 +257,13 @@ func main() {
 ### High-Level Overview
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   URL Frontier  │────│ Crawling Engine │────│Content Pipeline │
-│                 │    │                 │    │                 │
-│ • Priority Queue│    │ • Worker Pool   │    │ • Text Extract  │
-│ • Politeness    │    │ • Rate Limiter  │    │ • Quality Score │
-│ • Deduplication │    │ • Circuit Breaker│   │ • Deduplication │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   URL Frontier  │────│ Crawling Engine  │────│Content Pipeline │
+│                 │    │                  │    │                 │
+│ • Priority Queue│    │ • Worker Pool    │    │ • Text Extract  │
+│ • Politeness    │    │ • Rate Limiter   │    │ • Quality Score │
+│ • Deduplication │    │ • Circuit Breaker│    │ • Deduplication │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
                                 │
                        ┌─────────────────┐
                        │  Storage Layer  │
