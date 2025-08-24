@@ -2,9 +2,15 @@ package crawler
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
+	"regexp"
 	"runtime"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Almahr1/quert/internal/client"
@@ -61,39 +67,39 @@ type WorkerStats struct {
 // CrawlerEngine manages the worker pool and job distribution
 type CrawlerEngine struct {
 	// Configuration
-	config     *config.CrawlerConfig
-	httpConfig *config.HTTPConfig
-	logger     *zap.Logger
+	Config     *config.CrawlerConfig
+	HTTPConfig *config.HTTPConfig
+	Logger     *zap.Logger
 
 	// Worker pool management
-	workers     int
-	jobs        chan *CrawlJob
-	results     chan *CrawlResult
-	workerStats map[int]*WorkerStats
-	statsMutex  sync.RWMutex
+	Workers     int
+	Jobs        chan *CrawlJob
+	Results     chan *CrawlResult
+	WorkerStats map[int]*WorkerStats
+	StatsMutex  sync.RWMutex
 
 	// HTTP and external dependencies
-	httpClient   *client.HTTPClient
-	robotsParser *robots.Parser
+	HTTPClient   *client.HTTPClient
+	RobotsParser *robots.Parser
 
 	// Rate limiting
-	globalLimiter *rate.Limiter
-	hostLimiters  map[string]*rate.Limiter
-	limiterMutex  sync.RWMutex
+	GlobalLimiter *rate.Limiter
+	HostLimiters  map[string]*rate.Limiter
+	LimiterMutex  sync.RWMutex
 
 	// Lifecycle management
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	running      bool
-	runningMutex sync.RWMutex
+	Ctx          context.Context
+	Cancel       context.CancelFunc
+	Wg           sync.WaitGroup
+	Running      bool
+	RunningMutex sync.RWMutex
 
 	// Metrics and monitoring
-	totalJobs       int64
-	successfulJobs  int64
-	failedJobs      int64
-	startTime       time.Time
-	metricsCallback func(*CrawlerMetrics)
+	TotalJobs       int64
+	SuccessfulJobs  int64
+	FailedJobs      int64
+	StartTime       time.Time
+	MetricsCallback func(*CrawlerMetrics)
 }
 
 // CrawlerMetrics holds overall crawler performance metrics
@@ -267,39 +273,39 @@ func NewCrawlerEngine(cfg *config.CrawlerConfig, httpCfg *config.HTTPConfig, rob
 	// 10. Return configured CrawlerEngine instance
 	engine := &CrawlerEngine{
 		// Configuration
-		config:     &crawlerConfig,
-		httpConfig: httpCfg,
-		logger:     logger,
+		Config:     &crawlerConfig,
+		HTTPConfig: httpCfg,
+		Logger:     logger,
 
 		// Worker pool management
-		workers:     crawlerConfig.ConcurrentWorkers,
-		jobs:        jobsChannel,
-		results:     resultsChannel,
-		workerStats: workerStats,
-		statsMutex:  sync.RWMutex{},
+		Workers:     crawlerConfig.ConcurrentWorkers,
+		Jobs:        jobsChannel,
+		Results:     resultsChannel,
+		WorkerStats: workerStats,
+		StatsMutex:  sync.RWMutex{},
 
 		// HTTP and external dependencies
-		httpClient:   httpClient,
-		robotsParser: robotsParser,
+		HTTPClient:   httpClient,
+		RobotsParser: robotsParser,
 
 		// Rate limiting
-		globalLimiter: globalLimiter,
-		hostLimiters:  hostLimiters,
-		limiterMutex:  sync.RWMutex{},
+		GlobalLimiter: globalLimiter,
+		HostLimiters:  hostLimiters,
+		LimiterMutex:  sync.RWMutex{},
 
 		// Lifecycle management
-		ctx:          nil, // Will be set in Start()
-		cancel:       nil, // Will be set in Start()
-		wg:           sync.WaitGroup{},
-		running:      false,
-		runningMutex: sync.RWMutex{},
+		Ctx:          nil, // Will be set in Start()
+		Cancel:       nil, // Will be set in Start()
+		Wg:           sync.WaitGroup{},
+		Running:      false,
+		RunningMutex: sync.RWMutex{},
 
 		// Metrics and monitoring
-		totalJobs:       0,
-		successfulJobs:  0,
-		failedJobs:      0,
-		startTime:       time.Time{}, // Will be set in Start()
-		metricsCallback: nil,
+		TotalJobs:       0,
+		SuccessfulJobs:  0,
+		FailedJobs:      0,
+		StartTime:       time.Time{}, // Will be set in Start()
+		MetricsCallback: nil,
 	}
 
 	logger.Info("crawler engine initialized successfully",
@@ -311,269 +317,937 @@ func NewCrawlerEngine(cfg *config.CrawlerConfig, httpCfg *config.HTTPConfig, rob
 }
 
 // Start begins the crawler engine and spawns worker goroutines
-func (c *CrawlerEngine) Start(ctx context.Context) error {
-	// TODO: Start the crawler engine
+func (CrawlerEngine *CrawlerEngine) Start(Context context.Context) error {
 	// 1. Check if engine is already running (thread-safe check)
-	// 2. Set running state to true with mutex protection
-	// 3. Store provided context and create cancellable child context
-	// 4. Record start time for uptime tracking
-	// 5. Spawn configured number of worker goroutines
-	// 6. Start result processor goroutine
-	// 7. Start metrics collection goroutine (if callback provided)
-	// 8. Start rate limiter cleanup goroutine
-	// 9. Log successful startup with worker count
-	// 10. Return nil on success, error on failure
+	if CrawlerEngine.IsRunning() {
+		return fmt.Errorf("crawler engine is already running")
+	}
 
+	// 2. Set running state to true with mutex protection
+	CrawlerEngine.RunningMutex.Lock()
+	CrawlerEngine.Running = true
+	CrawlerEngine.RunningMutex.Unlock()
+
+	// 3. Store provided context and create cancellable child context
+	CrawlerEngine.Ctx, CrawlerEngine.Cancel = context.WithCancel(Context)
+
+	// 4. Record start time for uptime tracking
+	CrawlerEngine.StartTime = time.Now()
+
+	// 5. Spawn configured number of worker goroutines
+	for WorkerID := 0; WorkerID < CrawlerEngine.Workers; WorkerID++ {
+		CrawlerEngine.Wg.Add(1)
+		go CrawlerEngine.Worker(CrawlerEngine.Ctx, WorkerID)
+	}
+
+	// 6. Start result processor goroutine
+	CrawlerEngine.Wg.Add(1)
+	go CrawlerEngine.ResultProcessor(CrawlerEngine.Ctx)
+
+	// 7. Start metrics collection goroutine (if callback provided)
+	if CrawlerEngine.MetricsCallback != nil {
+		CrawlerEngine.Wg.Add(1)
+		go CrawlerEngine.MetricsCollector(CrawlerEngine.Ctx)
+	}
+
+	// 8. Start rate limiter cleanup goroutine
+	CrawlerEngine.Wg.Add(1)
+	go CrawlerEngine.cleanupRateLimiters(CrawlerEngine.Ctx)
+
+	// 9. Log successful startup with worker count
+	CrawlerEngine.Logger.Info("crawler engine started successfully",
+		zap.Int("workers", CrawlerEngine.Workers),
+		zap.Int("jobs_buffer_size", cap(CrawlerEngine.Jobs)),
+		zap.Int("results_buffer_size", cap(CrawlerEngine.Results)))
+
+	// 10. Return nil on success, error on failure
 	return nil
 }
 
 // Stop gracefully shuts down the crawler engine
-func (c *CrawlerEngine) Stop() error {
-	// TODO: Gracefully stop the crawler engine
+func (CrawlerEngine *CrawlerEngine) Stop() error {
 	// 1. Check if engine is running (return early if not)
-	// 2. Set running state to false with mutex protection
-	// 3. Cancel context to signal shutdown to all goroutines
-	// 4. Close jobs channel to stop accepting new jobs
-	// 5. Wait for all workers to finish current jobs (with timeout)
-	// 6. Close results channel after workers are done
-	// 7. Wait for result processor to finish
-	// 8. Clean up rate limiters and release resources
-	// 9. Log shutdown completion with final statistics
-	// 10. Return nil on success, error on timeout
+	if !CrawlerEngine.IsRunning() {
+		return fmt.Errorf("crawler engine is not running")
+	}
 
+	// 2. Set running state to false with mutex protection
+	CrawlerEngine.RunningMutex.Lock()
+	CrawlerEngine.Running = false
+	CrawlerEngine.RunningMutex.Unlock()
+
+	CrawlerEngine.Logger.Info("stopping crawler engine gracefully")
+
+	// 3. Cancel context to signal shutdown to all goroutines
+	if CrawlerEngine.Cancel != nil {
+		CrawlerEngine.Cancel()
+	}
+
+	// 4. Close jobs channel to stop accepting new jobs
+	close(CrawlerEngine.Jobs)
+
+	// 5. Wait for all workers to finish current jobs (with timeout)
+	WaitDone := make(chan struct{})
+	go func() {
+		CrawlerEngine.Wg.Wait()
+		close(WaitDone)
+	}()
+
+	select {
+	case <-WaitDone:
+		CrawlerEngine.Logger.Info("all workers finished gracefully")
+	case <-time.After(30 * time.Second):
+		CrawlerEngine.Logger.Warn("timeout waiting for workers to finish, forcing shutdown")
+	}
+
+	// 6. Close results channel after workers are done
+	close(CrawlerEngine.Results)
+
+	// 7. Wait for result processor to finish (already covered by Wg.Wait above)
+
+	// 8. Clean up rate limiters and release resources
+	CrawlerEngine.LimiterMutex.Lock()
+	for Host := range CrawlerEngine.HostLimiters {
+		delete(CrawlerEngine.HostLimiters, Host)
+	}
+	CrawlerEngine.LimiterMutex.Unlock()
+
+	// 9. Log shutdown completion with final statistics
+	Metrics := CrawlerEngine.GetMetrics()
+	if Metrics != nil {
+		CrawlerEngine.Logger.Info("crawler engine stopped",
+			zap.Int64("total_jobs", Metrics.TotalJobs),
+			zap.Int64("successful_jobs", Metrics.SuccessfulJobs),
+			zap.Int64("failed_jobs", Metrics.FailedJobs),
+			zap.Duration("uptime", Metrics.Uptime))
+	}
+
+	// 10. Return nil on success, error on timeout
 	return nil
 }
 
 // SubmitJob adds a new crawl job to the queue
-func (c *CrawlerEngine) SubmitJob(job *CrawlJob) error {
-	// TODO: Submit a crawl job to the worker pool
+func (CrawlerEngine *CrawlerEngine) SubmitJob(Job *CrawlJob) error {
 	// 1. Validate job parameters (URL, context not nil)
-	// 2. Check if engine is running (return error if not)
-	// 3. Set job submission timestamp
-	// 4. Generate unique request ID if not provided
-	// 5. Check robots.txt permissions for the URL
-	// 6. Apply rate limiting for the host
-	// 7. Attempt to send job to jobs channel (non-blocking)
-	// 8. Increment total jobs counter (thread-safe)
-	// 9. Log job submission with URL and priority
-	// 10. Return nil on success, error on failure or queue full
+	if Job == nil {
+		return fmt.Errorf("job cannot be nil")
+	}
+	if Job.URL == "" {
+		return fmt.Errorf("job URL cannot be empty")
+	}
+	if Job.Context == nil {
+		Job.Context = context.Background()
+	}
 
+	// 2. Check if engine is running (return error if not)
+	if !CrawlerEngine.IsRunning() {
+		return fmt.Errorf("crawler engine is not running")
+	}
+
+	// 3. Set job submission timestamp
+	Job.SubmittedAt = time.Now()
+
+	// 4. Generate unique request ID if not provided
+	if Job.RequestID == "" {
+		Job.RequestID = fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int63())
+	}
+
+	// 5. Check robots.txt permissions for the URL
+	HostFromURL, ExtractErr := frontier.ExtractHostFromURL(Job.URL)
+	if ExtractErr != nil {
+		return fmt.Errorf("failed to extract host from URL: %w", ExtractErr)
+	}
+
+	PermissionResult, RobotsErr := CrawlerEngine.RobotsParser.IsAllowed(Job.Context, Job.URL)
+	if RobotsErr != nil {
+		CrawlerEngine.Logger.Warn("robots.txt check failed, allowing by default",
+			zap.String("url", Job.URL),
+			zap.Error(RobotsErr))
+	} else if !PermissionResult.Allowed {
+		return fmt.Errorf("URL disallowed by robots.txt: %s", Job.URL)
+	}
+
+	// 6. Apply rate limiting for the host
+	HostLimiter := CrawlerEngine.GetRateLimiter(HostFromURL)
+	if GlobalErr := CrawlerEngine.GlobalLimiter.Wait(Job.Context); GlobalErr != nil {
+		return fmt.Errorf("global rate limit wait failed: %w", GlobalErr)
+	}
+	if HostErr := HostLimiter.Wait(Job.Context); HostErr != nil {
+		return fmt.Errorf("host rate limit wait failed: %w", HostErr)
+	}
+
+	// 7. Attempt to send job to jobs channel (non-blocking)
+	select {
+	case CrawlerEngine.Jobs <- Job:
+		// Successfully queued
+	case <-Job.Context.Done():
+		return Job.Context.Err()
+	default:
+		return fmt.Errorf("job queue is full, cannot accept new jobs")
+	}
+
+	// 8. Increment total jobs counter (thread-safe)
+	atomic.AddInt64(&CrawlerEngine.TotalJobs, 1)
+
+	// 9. Log job submission with URL and priority
+	CrawlerEngine.Logger.Debug("job submitted to queue",
+		zap.String("url", Job.URL),
+		zap.String("request_id", Job.RequestID),
+		zap.Int("priority", Job.Priority),
+		zap.Int("depth", Job.Depth))
+
+	// 10. Return nil on success, error on failure or queue full
 	return nil
 }
 
 // GetResults returns a channel for receiving crawl results
-func (c *CrawlerEngine) GetResults() <-chan *CrawlResult {
-	// TODO: Return results channel for consumers
+func (CrawlerEngine *CrawlerEngine) GetResults() <-chan *CrawlResult {
 	// 1. Check if engine is initialized
+	if CrawlerEngine == nil {
+		return nil
+	}
+
 	// 2. Return read-only channel to results
 	// Note: This is a simple getter but important for proper channel access
-
-	return nil
+	return CrawlerEngine.Results
 }
 
 // GetMetrics returns current crawler performance metrics
-func (c *CrawlerEngine) GetMetrics() *CrawlerMetrics {
-	// TODO: Calculate and return current metrics
+func (CrawlerEngine *CrawlerEngine) GetMetrics() *CrawlerMetrics {
 	// 1. Acquire read lock for thread-safe access
-	// 2. Calculate jobs per second based on uptime
-	// 3. Calculate average latency from worker stats
-	// 4. Count active workers currently processing jobs
-	// 5. Get current queue depth from jobs channel
-	// 6. Calculate error rate percentage
-	// 7. Calculate total uptime since start
-	// 8. Create and populate CrawlerMetrics struct
-	// 9. Release lock and return metrics
-	// 10. Handle edge cases (zero values, division by zero)
+	CrawlerEngine.StatsMutex.RLock()
+	defer CrawlerEngine.StatsMutex.RUnlock()
 
-	return nil
+	// Handle case where engine hasn't started yet
+	if CrawlerEngine.StartTime.IsZero() {
+		return &CrawlerMetrics{
+			TotalJobs:      0,
+			SuccessfulJobs: 0,
+			FailedJobs:     0,
+			JobsPerSecond:  0,
+			AverageLatency: 0,
+			ActiveWorkers:  0,
+			QueueDepth:     len(CrawlerEngine.Jobs),
+			Uptime:         0,
+			ErrorRate:      0,
+		}
+	}
+
+	// 2. Calculate jobs per second based on uptime
+	TotalJobsSnapshot := atomic.LoadInt64(&CrawlerEngine.TotalJobs)
+	SuccessfulJobsSnapshot := atomic.LoadInt64(&CrawlerEngine.SuccessfulJobs)
+	FailedJobsSnapshot := atomic.LoadInt64(&CrawlerEngine.FailedJobs)
+
+	// 7. Calculate total uptime since start
+	Uptime := time.Since(CrawlerEngine.StartTime)
+	UptimeSeconds := Uptime.Seconds()
+
+	var JobsPerSecond float64
+	if UptimeSeconds > 0 {
+		JobsPerSecond = float64(TotalJobsSnapshot) / UptimeSeconds
+	}
+
+	// 3. Calculate average latency from worker stats
+	var TotalLatency time.Duration
+	var LatencyCount int64
+	ActiveWorkerCount := 0
+
+	for _, WorkerStats := range CrawlerEngine.WorkerStats {
+		if WorkerStats.IsActive {
+			ActiveWorkerCount++
+		}
+		if WorkerStats.JobsProcessed > 0 {
+			TotalLatency += WorkerStats.AverageTime * time.Duration(WorkerStats.JobsProcessed)
+			LatencyCount += WorkerStats.JobsProcessed
+		}
+	}
+
+	var AverageLatency time.Duration
+	if LatencyCount > 0 {
+		AverageLatency = TotalLatency / time.Duration(LatencyCount)
+	}
+
+	// 5. Get current queue depth from jobs channel
+	QueueDepth := len(CrawlerEngine.Jobs)
+
+	// 6. Calculate error rate percentage
+	var ErrorRate float64
+	if TotalJobsSnapshot > 0 {
+		ErrorRate = float64(FailedJobsSnapshot) / float64(TotalJobsSnapshot) * 100
+	}
+
+	// 8. Create and populate CrawlerMetrics struct
+	Metrics := &CrawlerMetrics{
+		TotalJobs:      TotalJobsSnapshot,
+		SuccessfulJobs: SuccessfulJobsSnapshot,
+		FailedJobs:     FailedJobsSnapshot,
+		JobsPerSecond:  JobsPerSecond,
+		AverageLatency: AverageLatency,
+		ActiveWorkers:  ActiveWorkerCount,
+		QueueDepth:     QueueDepth,
+		Uptime:         Uptime,
+		ErrorRate:      ErrorRate,
+	}
+
+	// 9. Release lock and return metrics (handled by defer)
+	return Metrics
 }
 
 // GetWorkerStats returns statistics for all workers
-func (c *CrawlerEngine) GetWorkerStats() map[int]*WorkerStats {
-	// TODO: Return worker statistics
+func (CrawlerEngine *CrawlerEngine) GetWorkerStats() map[int]*WorkerStats {
 	// 1. Acquire read lock for thread-safe access
-	// 2. Create copy of worker stats map to avoid data races
-	// 3. Calculate average times for each worker
-	// 4. Update active status based on current job presence
-	// 5. Release lock and return stats copy
+	CrawlerEngine.StatsMutex.RLock()
+	defer CrawlerEngine.StatsMutex.RUnlock()
 
-	return nil
+	// 2. Create copy of worker stats map to avoid data races
+	StatsCopy := make(map[int]*WorkerStats)
+
+	for WorkerID, OriginalStats := range CrawlerEngine.WorkerStats {
+		// Create a deep copy of the worker stats
+		StatsCopy[WorkerID] = &WorkerStats{
+			WorkerID:       OriginalStats.WorkerID,
+			JobsProcessed:  OriginalStats.JobsProcessed,
+			JobsSuccessful: OriginalStats.JobsSuccessful,
+			JobsFailed:     OriginalStats.JobsFailed,
+			TotalTime:      OriginalStats.TotalTime,
+			LastJobTime:    OriginalStats.LastJobTime,
+			IsActive:       OriginalStats.IsActive,
+			CurrentJob:     OriginalStats.CurrentJob, // Note: this is a pointer copy
+		}
+
+		// 3. Calculate average times for each worker
+		if OriginalStats.JobsProcessed > 0 {
+			StatsCopy[WorkerID].AverageTime = OriginalStats.TotalTime / time.Duration(OriginalStats.JobsProcessed)
+		} else {
+			StatsCopy[WorkerID].AverageTime = 0
+		}
+
+		// 4. Update active status based on current job presence
+		StatsCopy[WorkerID].IsActive = OriginalStats.CurrentJob != nil
+	}
+
+	// 5. Release lock and return stats copy (handled by defer)
+	return StatsCopy
 }
 
 // SetMetricsCallback sets a callback function for metrics reporting
-func (c *CrawlerEngine) SetMetricsCallback(callback func(*CrawlerMetrics)) {
-	// TODO: Set metrics callback for periodic reporting
+func (CrawlerEngine *CrawlerEngine) SetMetricsCallback(Callback func(*CrawlerMetrics)) {
 	// 1. Store callback function for later use
+	CrawlerEngine.MetricsCallback = Callback
+
 	// 2. If engine is running, restart metrics goroutine with new callback
-	// Note: Simple setter but enables monitoring integration
-
-}
-
-// worker is the main worker goroutine function
-func (c *CrawlerEngine) worker(ctx context.Context, workerID int) {
-	// TODO: Main worker loop for processing crawl jobs
-	// 1. Initialize worker statistics and set active status
-	// 2. Log worker startup with worker ID
-	// 3. Start main processing loop with context cancellation
-	// 4. Listen for jobs from jobs channel
-	// 5. Process each job by calling processJob method
-	// 6. Update worker statistics after each job
-	// 7. Handle context cancellation gracefully
-	// 8. Log worker shutdown when loop exits
-	// 9. Decrement wait group to signal completion
-	// 10. Set worker as inactive in statistics
-
-}
-
-// processJob handles the actual crawling of a single URL
-func (c *CrawlerEngine) processJob(ctx context.Context, job *CrawlJob, workerID int) *CrawlResult {
-	// TODO: Process a single crawl job
-	// 1. Record job start time and update worker stats
-	// 2. Check robots.txt permissions for the URL
-	// 3. Apply rate limiting for the host
-	// 4. Create HTTP request with appropriate headers
-	// 5. Execute HTTP request with timeout and context
-	// 6. Handle HTTP response and read body
-	// 7. Extract links from HTML content (if applicable)
-	// 8. Extract main text content for LLM training
-	// 9. Create CrawlResult with all collected data
-	// 10. Handle errors and determine if job is retryable
-
-	return nil
-}
-
-// resultProcessor handles crawl results and manages output
-func (c *CrawlerEngine) resultProcessor(ctx context.Context) {
-	// TODO: Process crawl results from workers
-	// 1. Start result processing loop with context cancellation
-	// 2. Listen for results from results channel
-	// 3. Update global statistics (success/failure counters)
-	// 4. Log result processing with URL and status
-	// 5. Handle successful results (store data, extract links)
-	// 6. Handle failed results (retry logic, error logging)
-	// 7. Send results to external processors if configured
-	// 8. Clean up resources associated with completed jobs
-	// 9. Handle context cancellation and drain remaining results
-	// 10. Log processor shutdown when loop exits
-
-}
-
-// metricsCollector periodically collects and reports metrics
-func (c *CrawlerEngine) metricsCollector(ctx context.Context) {
-	// TODO: Collect and report metrics periodically
-	// 1. Create ticker for periodic metrics collection (default: 30s)
-	// 2. Start metrics collection loop with context cancellation
-	// 3. On each tick, calculate current metrics using GetMetrics
-	// 4. Call metrics callback function if configured
-	// 5. Log key metrics at INFO level for monitoring
-	// 6. Handle context cancellation gracefully
-	// 7. Stop ticker and clean up resources
-	// 8. Log metrics collector shutdown
-
-}
-
-// getRateLimiter gets or creates a rate limiter for a specific host
-func (c *CrawlerEngine) getRateLimiter(host string) *rate.Limiter {
-	// 1. Acquire read lock to check if limiter exists
-	c.limiterMutex.RLock()
-	if limiter, exists := c.hostLimiters[host]; exists {
-		c.limiterMutex.RUnlock()
-		return limiter
+	// Note: For simplicity, we'll let the existing metrics goroutine pick up the new callback
+	// In a more sophisticated implementation, we might restart the goroutine
+	if CrawlerEngine.IsRunning() && Callback != nil {
+		CrawlerEngine.Logger.Info("metrics callback updated while engine is running")
 	}
-	c.limiterMutex.RUnlock()
+}
+
+// Worker is the main worker goroutine function
+func (CrawlerEngine *CrawlerEngine) Worker(Context context.Context, WorkerID int) {
+	// 9. Decrement wait group to signal completion
+	defer CrawlerEngine.Wg.Done()
+
+	// 1. Initialize worker statistics and set active status
+	CrawlerEngine.StatsMutex.Lock()
+	if CrawlerEngine.WorkerStats[WorkerID] != nil {
+		CrawlerEngine.WorkerStats[WorkerID].IsActive = true
+	}
+	CrawlerEngine.StatsMutex.Unlock()
+
+	// 2. Log worker startup with worker ID
+	CrawlerEngine.Logger.Info("worker started",
+		zap.Int("worker_id", WorkerID))
+
+	// 10. Set worker as inactive in statistics when function exits
+	defer func() {
+		CrawlerEngine.StatsMutex.Lock()
+		if CrawlerEngine.WorkerStats[WorkerID] != nil {
+			CrawlerEngine.WorkerStats[WorkerID].IsActive = false
+			CrawlerEngine.WorkerStats[WorkerID].CurrentJob = nil
+		}
+		CrawlerEngine.StatsMutex.Unlock()
+
+		// 8. Log worker shutdown when loop exits
+		CrawlerEngine.Logger.Info("worker stopped",
+			zap.Int("worker_id", WorkerID))
+	}()
+
+	// 3. Start main processing loop with context cancellation
+	for {
+		select {
+		case <-Context.Done():
+			// 7. Handle context cancellation gracefully
+			CrawlerEngine.Logger.Debug("worker received shutdown signal",
+				zap.Int("worker_id", WorkerID))
+			return
+
+		case Job, ChannelOpen := <-CrawlerEngine.Jobs:
+			// 4. Listen for jobs from jobs channel
+			if !ChannelOpen {
+				// Jobs channel closed, shutdown gracefully
+				CrawlerEngine.Logger.Debug("jobs channel closed, worker shutting down",
+					zap.Int("worker_id", WorkerID))
+				return
+			}
+
+			// Set current job for tracking
+			CrawlerEngine.StatsMutex.Lock()
+			if CrawlerEngine.WorkerStats[WorkerID] != nil {
+				CrawlerEngine.WorkerStats[WorkerID].CurrentJob = Job
+			}
+			CrawlerEngine.StatsMutex.Unlock()
+
+			// 5. Process each job by calling ProcessJob method
+			Result := CrawlerEngine.ProcessJob(Context, Job, WorkerID)
+
+			// 6. Update worker statistics after each job
+			CrawlerEngine.UpdateWorkerStats(WorkerID, Job, Result)
+
+			// Send result to results channel (non-blocking with timeout)
+			select {
+			case CrawlerEngine.Results <- Result:
+				// Successfully sent result
+			case <-Context.Done():
+				// Context canceled while sending result
+				return
+			case <-time.After(5 * time.Second):
+				// Timeout sending result - log and continue
+				CrawlerEngine.Logger.Warn("timeout sending result to results channel",
+					zap.Int("worker_id", WorkerID),
+					zap.String("url", Job.URL))
+			}
+
+			// Clear current job
+			CrawlerEngine.StatsMutex.Lock()
+			if CrawlerEngine.WorkerStats[WorkerID] != nil {
+				CrawlerEngine.WorkerStats[WorkerID].CurrentJob = nil
+			}
+			CrawlerEngine.StatsMutex.Unlock()
+		}
+	}
+}
+
+// ProcessJob handles the actual crawling of a single URL
+func (CrawlerEngine *CrawlerEngine) ProcessJob(Context context.Context, Job *CrawlJob, WorkerID int) *CrawlResult {
+	// 1. Record job start time and update worker stats
+	StartTime := time.Now()
+
+	CrawlerEngine.Logger.Debug("processing job",
+		zap.Int("worker_id", WorkerID),
+		zap.String("url", Job.URL),
+		zap.String("request_id", Job.RequestID))
+
+	// Initialize result structure
+	Result := &CrawlResult{
+		Job:         Job,
+		URL:         Job.URL,
+		CompletedAt: time.Now(),
+		Success:     false,
+		Retryable:   false,
+	}
+
+	// 2. Check robots.txt permissions for the URL (already done in SubmitJob, but double-check)
+	PermissionResult, RobotsErr := CrawlerEngine.RobotsParser.IsAllowed(Context, Job.URL)
+	if RobotsErr != nil {
+		CrawlerEngine.Logger.Warn("robots.txt check failed during processing",
+			zap.String("url", Job.URL),
+			zap.Error(RobotsErr))
+		// Continue with crawling since we already checked in SubmitJob
+	} else if !PermissionResult.Allowed {
+		Result.Error = fmt.Errorf("URL disallowed by robots.txt: %s", Job.URL)
+		Result.Retryable = false
+		Result.ResponseTime = time.Since(StartTime)
+		return Result
+	}
+
+	// 3. Apply rate limiting for the host (already done in SubmitJob for submission, but apply again for processing)
+	HostFromURL, ExtractErr := frontier.ExtractHostFromURL(Job.URL)
+	if ExtractErr != nil {
+		Result.Error = fmt.Errorf("failed to extract host from URL: %w", ExtractErr)
+		Result.Retryable = false
+		Result.ResponseTime = time.Since(StartTime)
+		return Result
+	}
+
+	HostLimiter := CrawlerEngine.GetRateLimiter(HostFromURL)
+	if HostErr := HostLimiter.Wait(Context); HostErr != nil {
+		Result.Error = fmt.Errorf("host rate limit wait failed: %w", HostErr)
+		Result.Retryable = true // Rate limit errors are retryable
+		Result.ResponseTime = time.Since(StartTime)
+		return Result
+	}
+
+	// 4. Create HTTP request with appropriate headers
+	HTTPResponse, HTTPErr := CrawlerEngine.HTTPClient.Get(Context, Job.URL)
+	if HTTPErr != nil {
+		Result.Error = fmt.Errorf("HTTP request failed: %w", HTTPErr)
+		Result.Retryable = CrawlerEngine.IsRetryableHTTPError(HTTPErr)
+		Result.ResponseTime = time.Since(StartTime)
+		return Result
+	}
+	defer HTTPResponse.Body.Close()
+
+	// 5. Execute HTTP request with timeout and context (handled above by HTTPClient.Get)
+
+	// 6. Handle HTTP response and read body
+	Result.StatusCode = HTTPResponse.StatusCode
+	Result.Headers = HTTPResponse.Header
+	Result.ContentType = HTTPResponse.Header.Get("Content-Type")
+	Result.ContentLength = HTTPResponse.ContentLength
+	Result.ResponseTime = time.Since(StartTime)
+
+	// Read response body
+	BodyBytes, ReadErr := io.ReadAll(HTTPResponse.Body)
+	if ReadErr != nil {
+		Result.Error = fmt.Errorf("failed to read response body: %w", ReadErr)
+		Result.Retryable = true // Body read errors are typically retryable
+		return Result
+	}
+	Result.Body = BodyBytes
+
+	// Check for successful HTTP status
+	if HTTPResponse.StatusCode < 200 || HTTPResponse.StatusCode >= 300 {
+		Result.Error = fmt.Errorf("HTTP error status: %d", HTTPResponse.StatusCode)
+		Result.Retryable = CrawlerEngine.IsRetryableHTTPStatus(HTTPResponse.StatusCode)
+		return Result
+	}
+
+	// 7. Extract links from HTML content (if applicable)
+	if strings.Contains(strings.ToLower(Result.ContentType), "text/html") {
+		ExtractedLinks := CrawlerEngine.ExtractLinksFromHTML(string(BodyBytes), Job.URL)
+		Result.Links = ExtractedLinks
+	}
+
+	// 8. Extract main text content for LLM training
+	ExtractedText := CrawlerEngine.ExtractTextContent(string(BodyBytes), Result.ContentType)
+	Result.ExtractedText = ExtractedText
+
+	// 9. Create CrawlResult with all collected data (already populated above)
+	Result.Success = true
+	Result.Retryable = false
+
+	CrawlerEngine.Logger.Debug("job processed successfully",
+		zap.Int("worker_id", WorkerID),
+		zap.String("url", Job.URL),
+		zap.Int("status_code", Result.StatusCode),
+		zap.Duration("response_time", Result.ResponseTime),
+		zap.Int("body_size", len(Result.Body)),
+		zap.Int("extracted_links", len(Result.Links)))
+
+	return Result
+}
+
+// ResultProcessor handles crawl results and manages output
+func (CrawlerEngine *CrawlerEngine) ResultProcessor(Context context.Context) {
+	// Decrement wait group when function exits
+	defer CrawlerEngine.Wg.Done()
+
+	CrawlerEngine.Logger.Info("result processor started")
+
+	// 10. Log processor shutdown when loop exits
+	defer func() {
+		CrawlerEngine.Logger.Info("result processor stopped")
+	}()
+
+	// 1. Start result processing loop with context cancellation
+	for {
+		select {
+		case <-Context.Done():
+			// 9. Handle context cancellation and drain remaining results
+			CrawlerEngine.Logger.Info("result processor received shutdown signal, draining remaining results")
+			// Drain any remaining results with timeout
+			DrainTimeout := time.After(10 * time.Second)
+			for {
+				select {
+				case Result, ChannelOpen := <-CrawlerEngine.Results:
+					if !ChannelOpen {
+						CrawlerEngine.Logger.Info("results channel closed, result processor exiting")
+						return
+					}
+					CrawlerEngine.ProcessResult(Result)
+				case <-DrainTimeout:
+					CrawlerEngine.Logger.Warn("timeout draining results, forcing shutdown")
+					return
+				}
+			}
+
+		case Result, ChannelOpen := <-CrawlerEngine.Results:
+			// 2. Listen for results from results channel
+			if !ChannelOpen {
+				CrawlerEngine.Logger.Info("results channel closed, result processor exiting")
+				return
+			}
+
+			CrawlerEngine.ProcessResult(Result)
+		}
+	}
+}
+
+// ProcessResult handles individual crawl results
+func (CrawlerEngine *CrawlerEngine) ProcessResult(Result *CrawlResult) {
+	// 3. Update global statistics (success/failure counters)
+	if Result.Success {
+		atomic.AddInt64(&CrawlerEngine.SuccessfulJobs, 1)
+		// 4. Log result processing with URL and status
+		CrawlerEngine.Logger.Debug("result processed successfully",
+			zap.String("url", Result.URL),
+			zap.Int("status_code", Result.StatusCode),
+			zap.Duration("response_time", Result.ResponseTime),
+			zap.Int("extracted_links", len(Result.Links)))
+
+		// 5. Handle successful results (store data, extract links)
+		// TODO: In the future, this would integrate with storage layer
+		// For now, we just log the successful processing
+
+	} else {
+		atomic.AddInt64(&CrawlerEngine.FailedJobs, 1)
+		// 6. Handle failed results (retry logic, error logging)
+		CrawlerEngine.Logger.Warn("result processing failed",
+			zap.String("url", Result.URL),
+			zap.Int("status_code", Result.StatusCode),
+			zap.Bool("retryable", Result.Retryable),
+			zap.Error(Result.Error))
+
+		// TODO: Implement retry logic here
+		// If Result.Retryable is true, could resubmit job with exponential backoff
+	}
+
+	// 7. Send results to external processors if configured
+	// TODO: This would be where we integrate with external result processors
+	// such as storage systems, message queues, etc.
+
+	// 8. Clean up resources associated with completed jobs
+	// For now, results are handled by garbage collection
+	// In a production system, we might need explicit cleanup
+}
+
+// MetricsCollector periodically collects and reports metrics
+func (CrawlerEngine *CrawlerEngine) MetricsCollector(Context context.Context) {
+	// Decrement wait group when function exits
+	defer CrawlerEngine.Wg.Done()
+
+	// 1. Create ticker for periodic metrics collection (default: 30s)
+	Ticker := time.NewTicker(30 * time.Second)
+	defer Ticker.Stop()
+
+	CrawlerEngine.Logger.Info("metrics collector started")
+
+	// 8. Log metrics collector shutdown
+	defer func() {
+		CrawlerEngine.Logger.Info("metrics collector stopped")
+	}()
+
+	// 2. Start metrics collection loop with context cancellation
+	for {
+		select {
+		case <-Context.Done():
+			// 6. Handle context cancellation gracefully
+			CrawlerEngine.Logger.Debug("metrics collector received shutdown signal")
+			// 7. Stop ticker and clean up resources (handled by defer)
+			return
+
+		case <-Ticker.C:
+			// 3. On each tick, calculate current metrics using GetMetrics
+			CurrentMetrics := CrawlerEngine.GetMetrics()
+			if CurrentMetrics == nil {
+				continue
+			}
+
+			// 4. Call metrics callback function if configured
+			if CrawlerEngine.MetricsCallback != nil {
+				go func(Metrics *CrawlerMetrics) {
+					// Run callback in separate goroutine to avoid blocking
+					defer func() {
+						if RecoverErr := recover(); RecoverErr != nil {
+							CrawlerEngine.Logger.Error("metrics callback panic",
+								zap.Any("error", RecoverErr))
+						}
+					}()
+					CrawlerEngine.MetricsCallback(Metrics)
+				}(CurrentMetrics)
+			}
+
+			// 5. Log key metrics at INFO level for monitoring
+			CrawlerEngine.Logger.Info("crawler metrics",
+				zap.Int64("total_jobs", CurrentMetrics.TotalJobs),
+				zap.Int64("successful_jobs", CurrentMetrics.SuccessfulJobs),
+				zap.Int64("failed_jobs", CurrentMetrics.FailedJobs),
+				zap.Float64("jobs_per_second", CurrentMetrics.JobsPerSecond),
+				zap.Duration("average_latency", CurrentMetrics.AverageLatency),
+				zap.Int("active_workers", CurrentMetrics.ActiveWorkers),
+				zap.Int("queue_depth", CurrentMetrics.QueueDepth),
+				zap.Duration("uptime", CurrentMetrics.Uptime),
+				zap.Float64("error_rate", CurrentMetrics.ErrorRate))
+		}
+	}
+}
+
+// GetRateLimiter gets or creates a rate limiter for a specific host
+func (CrawlerEngine *CrawlerEngine) GetRateLimiter(Host string) *rate.Limiter {
+	// 1. Acquire read lock to check if limiter exists
+	CrawlerEngine.LimiterMutex.RLock()
+	if Limiter, exists := CrawlerEngine.HostLimiters[Host]; exists {
+		CrawlerEngine.LimiterMutex.RUnlock()
+		return Limiter
+	}
+	CrawlerEngine.LimiterMutex.RUnlock()
 
 	// 3. Upgrade to write lock if limiter doesn't exist
-	c.limiterMutex.Lock()
-	defer c.limiterMutex.Unlock()
+	CrawlerEngine.LimiterMutex.Lock()
+	defer CrawlerEngine.LimiterMutex.Unlock()
 
 	// 4. Double-check pattern to avoid race condition
-	if limiter, exists := c.hostLimiters[host]; exists {
-		return limiter
+	if Limiter, exists := CrawlerEngine.HostLimiters[Host]; exists {
+		return Limiter
 	}
 
 	// 5. Create new rate limiter with host-specific configuration
 	// Default: 2 requests per second per host, burst of 3
 	// TODO: 8. Handle rate limit configuration from robots.txt crawl-delay
-	hostLimiter := rate.NewLimiter(rate.Limit(2.0), 3)
+	HostLimiter := rate.NewLimiter(rate.Limit(2.0), 3)
 
 	// 6. Store limiter in map for future use
-	c.hostLimiters[host] = hostLimiter
+	CrawlerEngine.HostLimiters[Host] = HostLimiter
 
-	c.logger.Debug("created new rate limiter for host",
-		zap.String("host", host),
-		zap.Float64("rate_limit", float64(hostLimiter.Limit())),
-		zap.Int("burst", hostLimiter.Burst()))
+	CrawlerEngine.Logger.Debug("created new rate limiter for host",
+		zap.String("host", Host),
+		zap.Float64("rate_limit", float64(HostLimiter.Limit())),
+		zap.Int("burst", HostLimiter.Burst()))
 
-	return hostLimiter
+	return HostLimiter
+}
+
+// IsRetryableHTTPError determines if an HTTP error should trigger a retry
+func (CrawlerEngine *CrawlerEngine) IsRetryableHTTPError(Error error) bool {
+	if Error == nil {
+		return false
+	}
+
+	// Use the HTTP client's retry logic
+	return client.IsRetryableError(Error, CrawlerEngine.HTTPClient.RetryConfig.RetryableErrors)
+}
+
+// IsRetryableHTTPStatus determines if an HTTP status code should trigger a retry
+func (CrawlerEngine *CrawlerEngine) IsRetryableHTTPStatus(StatusCode int) bool {
+	// Use the HTTP client's retry logic
+	return client.IsRetryableStatus(StatusCode, CrawlerEngine.HTTPClient.RetryConfig.RetryableStatus)
+}
+
+// ExtractLinksFromHTML extracts links from HTML content
+func (CrawlerEngine *CrawlerEngine) ExtractLinksFromHTML(HTMLContent string, BaseURL string) []string {
+	var Links []string
+
+	// Simple regex-based link extraction
+	// In production, you'd want to use a proper HTML parser like goquery * future implementation *
+	LinkRegex := regexp.MustCompile(`href=["']([^"']+)["']`)
+	Matches := LinkRegex.FindAllStringSubmatch(HTMLContent, -1)
+
+	for _, Match := range Matches {
+		if len(Match) > 1 {
+			LinkURL := Match[1]
+			// Basic URL resolution (relative to absolute)
+			if strings.HasPrefix(LinkURL, "/") {
+				// Relative URL - combine with base
+				HostFromBase, HostErr := frontier.ExtractHostFromURL(BaseURL)
+				if HostErr == nil {
+					if strings.HasPrefix(BaseURL, "https://") {
+						LinkURL = "https://" + HostFromBase + LinkURL
+					} else {
+						LinkURL = "http://" + HostFromBase + LinkURL
+					}
+				}
+			} else if !strings.HasPrefix(LinkURL, "http://") && !strings.HasPrefix(LinkURL, "https://") {
+				// Skip non-HTTP links (mailto:, javascript:, etc.)
+				continue
+			}
+
+			Links = append(Links, LinkURL)
+		}
+	}
+
+	// Remove duplicates
+	SeenLinks := make(map[string]bool)
+	var UniqueLinks []string
+	for _, Link := range Links {
+		if !SeenLinks[Link] {
+			SeenLinks[Link] = true
+			UniqueLinks = append(UniqueLinks, Link)
+		}
+	}
+
+	return UniqueLinks
+}
+
+// ExtractTextContent extracts main text content from various content types
+func (CrawlerEngine *CrawlerEngine) ExtractTextContent(Content string, ContentType string) string {
+	if Content == "" {
+		return ""
+	}
+
+	// Handle different content types
+	ContentTypeLower := strings.ToLower(ContentType)
+
+	switch {
+	case strings.Contains(ContentTypeLower, "text/html"):
+		return CrawlerEngine.extractTextFromHTML(Content)
+	case strings.Contains(ContentTypeLower, "text/plain"):
+		return CrawlerEngine.extractTextFromPlain(Content)
+	case strings.Contains(ContentTypeLower, "application/xml") || strings.Contains(ContentTypeLower, "text/xml"):
+		return CrawlerEngine.extractTextFromXML(Content)
+	default:
+		// For other content types, try to extract text as plain text
+		return CrawlerEngine.extractTextFromPlain(Content)
+	}
+}
+
+// extractTextFromHTML extracts text content from HTML
+func (CrawlerEngine *CrawlerEngine) extractTextFromHTML(HTMLContent string) string {
+	// Simple HTML tag removal - in production you'd use a proper HTML parser
+	TagRegex := regexp.MustCompile(`<[^>]*>`)
+	TextContent := TagRegex.ReplaceAllString(HTMLContent, " ")
+
+	// Remove script and style content
+	ScriptRegex := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	TextContent = ScriptRegex.ReplaceAllString(TextContent, " ")
+
+	StyleRegex := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	TextContent = StyleRegex.ReplaceAllString(TextContent, " ")
+
+	// Normalize whitespace
+	WhitespaceRegex := regexp.MustCompile(`\s+`)
+	TextContent = WhitespaceRegex.ReplaceAllString(TextContent, " ")
+
+	return strings.TrimSpace(TextContent)
+}
+
+// extractTextFromPlain handles plain text content
+func (CrawlerEngine *CrawlerEngine) extractTextFromPlain(PlainContent string) string {
+	// For plain text, just normalize whitespace
+	WhitespaceRegex := regexp.MustCompile(`\s+`)
+	TextContent := WhitespaceRegex.ReplaceAllString(PlainContent, " ")
+	return strings.TrimSpace(TextContent)
+}
+
+// extractTextFromXML extracts text content from XML
+func (CrawlerEngine *CrawlerEngine) extractTextFromXML(XMLContent string) string {
+	// Simple XML tag removal - similar to HTML
+	TagRegex := regexp.MustCompile(`<[^>]*>`)
+	TextContent := TagRegex.ReplaceAllString(XMLContent, " ")
+
+	// Normalize whitespace
+	WhitespaceRegex := regexp.MustCompile(`\s+`)
+	TextContent = WhitespaceRegex.ReplaceAllString(TextContent, " ")
+
+	return strings.TrimSpace(TextContent)
 }
 
 // cleanupRateLimiters removes unused rate limiters to prevent memory leaks
-func (c *CrawlerEngine) cleanupRateLimiters(ctx context.Context) {
-	// 1. Create ticker for periodic cleanup (default: 10 minutes)
-	ticker := time.NewTicker(10 * time.Minute)
-	defer ticker.Stop()
+func (CrawlerEngine *CrawlerEngine) cleanupRateLimiters(Context context.Context) {
+	// Decrement wait group when function exits
+	defer CrawlerEngine.Wg.Done()
 
-	c.logger.Info("starting rate limiter cleanup goroutine", zap.Duration("interval", 10*time.Minute))
+	// 1. Create ticker for periodic cleanup (default: 10 minutes)
+	Ticker := time.NewTicker(10 * time.Minute)
+	defer Ticker.Stop()
+
+	CrawlerEngine.Logger.Info("starting rate limiter cleanup goroutine", zap.Duration("interval", 10*time.Minute))
 
 	// 2. Start cleanup loop with context cancellation
 	for {
 		select {
-		case <-ctx.Done():
+		case <-Context.Done():
 			// 6. Handle context cancellation gracefully
-			c.logger.Info("rate limiter cleanup goroutine stopping due to context cancellation")
+			CrawlerEngine.Logger.Info("rate limiter cleanup goroutine stopping due to context cancellation")
 			return
 
-		case <-ticker.C:
+		case <-Ticker.C:
 			// 3. On each tick, iterate through rate limiters
-			c.limiterMutex.Lock()
+			CrawlerEngine.LimiterMutex.Lock()
 
-			initialCount := len(c.hostLimiters)
-			removedCount := 0
+			InitialCount := len(CrawlerEngine.HostLimiters)
+			RemovedCount := 0
 
 			// 4. Remove limiters that haven't been used recently
 			// Simple approach: remove limiters with no recent activity
 			// More sophisticated: track last use time and remove old ones
-			for host, limiter := range c.hostLimiters {
+			for Host, Limiter := range CrawlerEngine.HostLimiters {
 				// Check if limiter has available tokens (indicating no recent heavy use)
 				// This is a simple heuristic - if burst is fully available, likely unused
-				if limiter.Tokens() >= float64(limiter.Burst()) {
-					delete(c.hostLimiters, host)
-					removedCount++
+				if Limiter.Tokens() >= float64(Limiter.Burst()) {
+					delete(CrawlerEngine.HostLimiters, Host)
+					RemovedCount++
 				}
 			}
 
-			c.limiterMutex.Unlock()
+			CrawlerEngine.LimiterMutex.Unlock()
 
 			// 5. Log cleanup statistics (removed/remaining limiters)
-			if removedCount > 0 {
-				c.logger.Info("cleaned up unused rate limiters",
-					zap.Int("removed", removedCount),
-					zap.Int("remaining", initialCount-removedCount),
-					zap.Int("initial", initialCount))
+			if RemovedCount > 0 {
+				CrawlerEngine.Logger.Info("cleaned up unused rate limiters",
+					zap.Int("removed", RemovedCount),
+					zap.Int("remaining", InitialCount-RemovedCount),
+					zap.Int("initial", InitialCount))
 			}
 		}
 	}
 }
 
-// isRunning safely checks if the crawler engine is running
-func (c *CrawlerEngine) isRunning() bool {
-	// TODO: Thread-safe check of running status
+// IsRunning safely checks if the crawler engine is running
+func (CrawlerEngine *CrawlerEngine) IsRunning() bool {
 	// 1. Acquire read lock for thread safety
-	// 2. Read running status
-	// 3. Release lock and return status
+	CrawlerEngine.RunningMutex.RLock()
+	defer CrawlerEngine.RunningMutex.RUnlock()
 
-	return false
+	// 2. Read running status
+	// 3. Release lock and return status (handled by defer)
+	return CrawlerEngine.Running
 }
 
-// updateWorkerStats safely updates statistics for a worker
-func (c *CrawlerEngine) updateWorkerStats(workerID int, job *CrawlJob, result *CrawlResult) {
-	// TODO: Update worker statistics thread-safely
+// UpdateWorkerStats safely updates statistics for a worker
+func (CrawlerEngine *CrawlerEngine) UpdateWorkerStats(WorkerID int, Job *CrawlJob, Result *CrawlResult) {
 	// 1. Acquire write lock for thread safety
-	// 2. Get or create worker stats for workerID
-	// 3. Increment job counters based on result success/failure
-	// 4. Update timing statistics with job duration
-	// 5. Calculate running average of job processing time
-	// 6. Update last job time and current job reference
-	// 7. Release lock after updates complete
+	CrawlerEngine.StatsMutex.Lock()
+	defer CrawlerEngine.StatsMutex.Unlock()
 
+	// 2. Get or create worker stats for WorkerID
+	CurrentWorkerStats, exists := CrawlerEngine.WorkerStats[WorkerID]
+	if !exists {
+		// This shouldn't happen if engine is properly initialized, but handle gracefully
+		CurrentWorkerStats = &WorkerStats{
+			WorkerID:       WorkerID,
+			JobsProcessed:  0,
+			JobsSuccessful: 0,
+			JobsFailed:     0,
+			TotalTime:      0,
+			AverageTime:    0,
+			LastJobTime:    time.Time{},
+			IsActive:       false,
+			CurrentJob:     nil,
+		}
+		CrawlerEngine.WorkerStats[WorkerID] = CurrentWorkerStats
+	}
+
+	// 3. Increment job counters based on result success/failure
+	CurrentWorkerStats.JobsProcessed++
+	if Result.Success {
+		CurrentWorkerStats.JobsSuccessful++
+	} else {
+		CurrentWorkerStats.JobsFailed++
+	}
+
+	// 4. Update timing statistics with job duration
+	JobDuration := Result.ResponseTime
+	if JobDuration > 0 {
+		CurrentWorkerStats.TotalTime += JobDuration
+
+		// 5. Calculate running average of job processing time
+		CurrentWorkerStats.AverageTime = CurrentWorkerStats.TotalTime / time.Duration(CurrentWorkerStats.JobsProcessed)
+	}
+
+	// 6. Update last job time and current job reference
+	CurrentWorkerStats.LastJobTime = time.Now()
+	CurrentWorkerStats.CurrentJob = nil // Job is completed
+
+	// 7. Release lock after updates complete (handled by defer)
 }

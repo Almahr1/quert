@@ -39,7 +39,7 @@ type URLNormalizer struct {
 	RemoveTrailingSlash bool
 	ParamWhitelist      []string
 	ParamBlacklist      []string
-	mutex               sync.RWMutex
+	Mutex               sync.RWMutex
 }
 
 type URLValidator struct {
@@ -54,15 +54,15 @@ type URLValidator struct {
 	BlockedExtensions   []string
 	MaxURLLength        int
 	MaxPathDepth        int
-	mutex               sync.RWMutex
+	Mutex               sync.RWMutex
 }
 
 type URLDeduplicator struct {
-	urlSeen        map[string]struct{} // Simple map for now, bloom filter later
-	contentHashes  map[string]string   // SHA-256 hash -> URL
-	simhashes      map[uint64]string   // Simhash -> URL
-	semanticHashes map[string]string   // Embedding hash -> URL
-	mutex          sync.RWMutex
+	URLSeen        map[string]struct{} // Simple map for now, bloom filter later
+	ContentHashes  map[string]string   // SHA-256 hash -> URL
+	Simhashes      map[uint64]string   // Simhash -> URL
+	SemanticHashes map[string]string   // Embedding hash -> URL
+	Mutex          sync.RWMutex
 }
 
 type DomainInfo struct {
@@ -78,14 +78,14 @@ type DomainInfo struct {
 }
 
 type URLProcessor struct {
-	normalizer     *URLNormalizer
-	validator      *URLValidator
-	deduplicator   *URLDeduplicator
-	processedCount uint64
-	validCount     uint64
-	duplicateCount uint64
-	invalidCount   uint64
-	mutex          sync.RWMutex
+	Normalizer     *URLNormalizer
+	Validator      *URLValidator
+	Deduplicator   *URLDeduplicator
+	ProcessedCount uint64
+	ValidCount     uint64
+	DuplicateCount uint64
+	InvalidCount   uint64
+	Mutex          sync.RWMutex
 }
 
 func NewURLNormalizer() *URLNormalizer {
@@ -99,7 +99,7 @@ func NewURLNormalizer() *URLNormalizer {
 		RemoveTrailingSlash: false,
 		ParamWhitelist:      []string{},
 		ParamBlacklist:      []string{"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid", "ref", "source"},
-		mutex:               sync.RWMutex{},
+		Mutex:               sync.RWMutex{},
 	}
 }
 
@@ -116,36 +116,36 @@ func NewURLValidator() *URLValidator {
 		BlockedExtensions:   []string{".pdf", ".jpg", ".jpeg", ".png", ".gif", ".mp4", ".avi", ".zip", ".rar", ".exe", ".dmg"},
 		MaxURLLength:        2048,
 		MaxPathDepth:        10,
-		mutex:               sync.RWMutex{},
+		Mutex:               sync.RWMutex{},
 	}
 }
 
 func NewURLDeduplicator() *URLDeduplicator {
 	return &URLDeduplicator{
-		urlSeen:        make(map[string]struct{}),
-		contentHashes:  make(map[string]string),
-		simhashes:      make(map[uint64]string),
-		semanticHashes: make(map[string]string),
-		mutex:          sync.RWMutex{},
+		URLSeen:        make(map[string]struct{}),
+		ContentHashes:  make(map[string]string),
+		Simhashes:      make(map[uint64]string),
+		SemanticHashes: make(map[string]string),
+		Mutex:          sync.RWMutex{},
 	}
 }
 
 func NewURLProcessor() *URLProcessor {
 	return &URLProcessor{
-		normalizer:     NewURLNormalizer(),
-		validator:      NewURLValidator(),
-		deduplicator:   NewURLDeduplicator(),
-		processedCount: 0,
-		validCount:     0,
-		duplicateCount: 0,
-		invalidCount:   0,
-		mutex:          sync.RWMutex{},
+		Normalizer:     NewURLNormalizer(),
+		Validator:      NewURLValidator(),
+		Deduplicator:   NewURLDeduplicator(),
+		ProcessedCount: 0,
+		ValidCount:     0,
+		DuplicateCount: 0,
+		InvalidCount:   0,
+		Mutex:          sync.RWMutex{},
 	}
 }
 
 func (n *URLNormalizer) Normalize(rawURL string) (string, error) {
-	n.mutex.RLock()
-	defer n.mutex.RUnlock()
+	n.Mutex.RLock()
+	defer n.Mutex.RUnlock()
 
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -245,8 +245,8 @@ func ParseURL(rawURL string) (*url.URL, error) {
 }
 
 func (n *URLNormalizer) Canonicalize(parsedURL *url.URL) string {
-	n.mutex.RLock()
-	defer n.mutex.RUnlock()
+	n.Mutex.RLock()
+	defer n.Mutex.RUnlock()
 
 	// Create a copy to avoid modifying the original
 	u := *parsedURL
@@ -285,8 +285,8 @@ func (n *URLNormalizer) Canonicalize(parsedURL *url.URL) string {
 }
 
 func (n *URLNormalizer) NormalizeHost(host string) string {
-	n.mutex.RLock()
-	defer n.mutex.RUnlock()
+	n.Mutex.RLock()
+	defer n.Mutex.RUnlock()
 
 	if host == "" {
 		return host
@@ -301,8 +301,8 @@ func (n *URLNormalizer) NormalizeHost(host string) string {
 }
 
 func (n *URLNormalizer) NormalizePath(inputPath string) string {
-	n.mutex.RLock()
-	defer n.mutex.RUnlock()
+	n.Mutex.RLock()
+	defer n.Mutex.RUnlock()
 
 	if inputPath == "" {
 		return inputPath
@@ -320,8 +320,8 @@ func (n *URLNormalizer) NormalizePath(inputPath string) string {
 }
 
 func (n *URLNormalizer) NormalizeQuery(query string) string {
-	n.mutex.RLock()
-	defer n.mutex.RUnlock()
+	n.Mutex.RLock()
+	defer n.Mutex.RUnlock()
 
 	return n.processQueryParameters(query)
 }
@@ -385,8 +385,8 @@ func (n *URLNormalizer) processQueryParameters(query string) string {
 }
 
 func (v *URLValidator) IsValid(urlInfo *URLInfo) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	if urlInfo == nil || urlInfo.URL == "" {
 		return false
@@ -431,8 +431,8 @@ func (v *URLValidator) IsValid(urlInfo *URLInfo) bool {
 }
 
 func (v *URLValidator) ValidateScheme(scheme string) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	if len(v.AllowedSchemes) == 0 {
 		return true // No restrictions
@@ -448,8 +448,8 @@ func (v *URLValidator) ValidateScheme(scheme string) bool {
 }
 
 func (v *URLValidator) ValidateDomain(domain string) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	if domain == "" {
 		return false
@@ -485,8 +485,8 @@ func (v *URLValidator) ValidateDomain(domain string) bool {
 }
 
 func (v *URLValidator) ValidateContentType(contentType string) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	if contentType == "" {
 		return true // No content type to validate
@@ -531,8 +531,8 @@ func (v *URLValidator) ValidateContentType(contentType string) bool {
 }
 
 func (v *URLValidator) ValidatePatterns(url string) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	// Check exclude patterns first
 	for _, pattern := range v.ExcludePatterns {
@@ -557,8 +557,8 @@ func (v *URLValidator) ValidatePatterns(url string) bool {
 }
 
 func (v *URLValidator) ValidateExtension(rawURL string) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -593,8 +593,8 @@ func (v *URLValidator) ValidateExtension(rawURL string) bool {
 }
 
 func (v *URLValidator) ValidateLength(rawURL string) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	if v.MaxURLLength <= 0 {
 		return true // No length restriction
@@ -604,8 +604,8 @@ func (v *URLValidator) ValidateLength(rawURL string) bool {
 }
 
 func (v *URLValidator) ValidateDepth(rawURL string) bool {
-	v.mutex.RLock()
-	defer v.mutex.RUnlock()
+	v.Mutex.RLock()
+	defer v.Mutex.RUnlock()
 
 	if v.MaxPathDepth <= 0 {
 		return true // No depth restriction
@@ -621,28 +621,28 @@ func (v *URLValidator) ValidateDepth(rawURL string) bool {
 }
 
 func (d *URLDeduplicator) IsDuplicate(url string) bool {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
+	d.Mutex.RLock()
+	defer d.Mutex.RUnlock()
 
-	_, exists := d.urlSeen[url]
+	_, exists := d.URLSeen[url]
 	return exists
 }
 
 func (d *URLDeduplicator) IsContentDuplicate(contentHash string) (bool, string) {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
+	d.Mutex.RLock()
+	defer d.Mutex.RUnlock()
 
-	if existingURL, exists := d.contentHashes[contentHash]; exists {
+	if existingURL, exists := d.ContentHashes[contentHash]; exists {
 		return true, existingURL
 	}
 	return false, ""
 }
 
 func (d *URLDeduplicator) IsSimilar(simhash uint64, threshold int) (bool, string) {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
+	d.Mutex.RLock()
+	defer d.Mutex.RUnlock()
 
-	for existingHash, url := range d.simhashes {
+	for existingHash, url := range d.Simhashes {
 		distance := HammingDistance(simhash, existingHash)
 		if distance <= threshold {
 			return true, url
@@ -652,41 +652,41 @@ func (d *URLDeduplicator) IsSimilar(simhash uint64, threshold int) (bool, string
 }
 
 func (d *URLDeduplicator) IsSemanticallyDuplicate(embeddingHash string) (bool, string) {
-	d.mutex.RLock()
-	defer d.mutex.RUnlock()
+	d.Mutex.RLock()
+	defer d.Mutex.RUnlock()
 
-	if existingURL, exists := d.semanticHashes[embeddingHash]; exists {
+	if existingURL, exists := d.SemanticHashes[embeddingHash]; exists {
 		return true, existingURL
 	}
 	return false, ""
 }
 
 func (d *URLDeduplicator) AddURL(url string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
 
-	d.urlSeen[url] = struct{}{}
+	d.URLSeen[url] = struct{}{}
 }
 
 func (d *URLDeduplicator) AddContentHash(hash, url string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
 
-	d.contentHashes[hash] = url
+	d.ContentHashes[hash] = url
 }
 
 func (d *URLDeduplicator) AddSimhash(hash uint64, url string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
 
-	d.simhashes[hash] = url
+	d.Simhashes[hash] = url
 }
 
 func (d *URLDeduplicator) AddSemanticHash(hash, url string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
 
-	d.semanticHashes[hash] = url
+	d.SemanticHashes[hash] = url
 }
 
 // ExtractHostFromURL extracts the host (domain:port) from a URL string.
@@ -812,21 +812,21 @@ func IsIPAddress(host string) bool {
 }
 
 func (p *URLProcessor) Process(rawURL string) (*URLInfo, error) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
 
-	p.processedCount++
+	p.ProcessedCount++
 
 	// 1. Normalize URL
-	normalizedURL, err := p.normalizer.Normalize(rawURL)
+	normalizedURL, err := p.Normalizer.Normalize(rawURL)
 	if err != nil {
-		p.invalidCount++
+		p.InvalidCount++
 		return nil, fmt.Errorf("failed to normalize URL: %w", err)
 	}
 
 	// 2. Check for duplicates (Level 1: URL deduplication)
-	if p.deduplicator.IsDuplicate(normalizedURL) {
-		p.duplicateCount++
+	if p.Deduplicator.IsDuplicate(normalizedURL) {
+		p.DuplicateCount++
 		return nil, fmt.Errorf("URL already processed: %s", normalizedURL)
 	}
 
@@ -850,14 +850,14 @@ func (p *URLProcessor) Process(rawURL string) (*URLInfo, error) {
 	}
 
 	// 5. Validate URL
-	if !p.validator.IsValid(urlInfo) {
-		p.invalidCount++
+	if !p.Validator.IsValid(urlInfo) {
+		p.InvalidCount++
 		return nil, fmt.Errorf("URL validation failed: %s", normalizedURL)
 	}
 
 	// 6. Add to deduplication tracking
-	p.deduplicator.AddURL(normalizedURL)
-	p.validCount++
+	p.Deduplicator.AddURL(normalizedURL)
+	p.ValidCount++
 
 	return urlInfo, nil
 }
@@ -901,40 +901,40 @@ func (p *URLProcessor) ProcessBatch(urls []string) ([]*URLInfo, []error) {
 }
 
 func (p *URLProcessor) GetStatistics() map[string]uint64 {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
+	p.Mutex.RLock()
+	defer p.Mutex.RUnlock()
 
 	return map[string]uint64{
-		"processed_count": p.processedCount,
-		"valid_count":     p.validCount,
-		"duplicate_count": p.duplicateCount,
-		"invalid_count":   p.invalidCount,
+		"processed_count": p.ProcessedCount,
+		"valid_count":     p.ValidCount,
+		"duplicate_count": p.DuplicateCount,
+		"invalid_count":   p.InvalidCount,
 	}
 }
 
 func (p *URLProcessor) Reset() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
 
 	// Reset counters
-	p.processedCount = 0
-	p.validCount = 0
-	p.duplicateCount = 0
-	p.invalidCount = 0
+	p.ProcessedCount = 0
+	p.ValidCount = 0
+	p.DuplicateCount = 0
+	p.InvalidCount = 0
 
 	// Reset deduplicator
-	p.deduplicator = NewURLDeduplicator()
+	p.Deduplicator = NewURLDeduplicator()
 }
 
 func (p *URLProcessor) UpdateConfiguration(normalizer *URLNormalizer, validator *URLValidator) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
 
 	if normalizer != nil {
-		p.normalizer = normalizer
+		p.Normalizer = normalizer
 	}
 	if validator != nil {
-		p.validator = validator
+		p.Validator = validator
 	}
 }
 

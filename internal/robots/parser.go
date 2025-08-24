@@ -26,13 +26,13 @@ type CacheEntry struct {
 
 // Parser handles robots.txt fetching, caching, and permission checking
 type Parser struct {
-	httpClient *client.HTTPClient
-	cache      map[string]*CacheEntry
-	cacheMutex sync.RWMutex
-	cacheTTL   time.Duration // Time To Live
-	userAgent  string
-	fetchMutex map[string]*sync.Mutex // Per-host fetch mutex to prevent concurrent requests
-	mutexLock  sync.Mutex             // Protects fetchMutex map
+	HTTPClient *client.HTTPClient
+	Cache      map[string]*CacheEntry
+	CacheMutex sync.RWMutex
+	CacheTTL   time.Duration // Time To Live
+	UserAgent  string
+	FetchMutex map[string]*sync.Mutex // Per-host fetch mutex to prevent concurrent requests
+	MutexLock  sync.Mutex             // Protects fetchMutex map
 }
 
 // Config holds configuration for the robots.txt parser
@@ -61,43 +61,43 @@ type FetchResult struct {
 }
 
 // NewParser creates a new robots.txt parser with the given configuration and HTTP client
-func NewParser(config Config, httpClient *client.HTTPClient) *Parser {
-	if config.UserAgent == "" {
-		config.UserAgent = "*"
+func NewParser(Config Config, HTTPClient *client.HTTPClient) *Parser {
+	if Config.UserAgent == "" {
+		Config.UserAgent = "*"
 	}
-	if config.CacheTTL <= 0 {
-		config.CacheTTL = 24 * time.Hour
+	if Config.CacheTTL <= 0 {
+		Config.CacheTTL = 24 * time.Hour
 	}
-	if config.HTTPTimeout <= 0 {
-		config.HTTPTimeout = 30 * time.Second
+	if Config.HTTPTimeout <= 0 {
+		Config.HTTPTimeout = 30 * time.Second
 	}
-	if config.MaxSize <= 0 {
-		config.MaxSize = 500 * 1024 // 500KB
+	if Config.MaxSize <= 0 {
+		Config.MaxSize = 500 * 1024 // 500KB
 	}
 
 	return &Parser{
-		httpClient: httpClient,
-		cache:      make(map[string]*CacheEntry),
-		cacheMutex: sync.RWMutex{},
-		cacheTTL:   config.CacheTTL,
-		userAgent:  config.UserAgent,
-		fetchMutex: make(map[string]*sync.Mutex),
-		mutexLock:  sync.Mutex{},
+		HTTPClient: HTTPClient,
+		Cache:      make(map[string]*CacheEntry),
+		CacheMutex: sync.RWMutex{},
+		CacheTTL:   Config.CacheTTL,
+		UserAgent:  Config.UserAgent,
+		FetchMutex: make(map[string]*sync.Mutex),
+		MutexLock:  sync.Mutex{},
 	}
 }
 
 // IsAllowed checks if a URL is allowed to be crawled according to robots.txt
 // This is the main function that crawlers will use
-func (p *Parser) IsAllowed(ctx context.Context, rawURL string) (*PermissionResult, error) {
-	if rawURL == "" {
+func (P *Parser) IsAllowed(Ctx context.Context, RawURL string) (*PermissionResult, error) {
+	if RawURL == "" {
 		return nil, fmt.Errorf("empty URL provided")
 	}
-	host, err := frontier.ExtractHostFromURL(rawURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract host from URL %q: %w", rawURL, err)
+	Host, Err := frontier.ExtractHostFromURL(RawURL)
+	if Err != nil {
+		return nil, fmt.Errorf("failed to extract host from URL %q: %w", RawURL, Err)
 	}
-	robots, err := p.GetRobots(ctx, host)
-	if err != nil {
+	Robots, Err := P.GetRobots(Ctx, Host)
+	if Err != nil {
 		// If we can't fetch robots.txt, be permissive and allow crawling
 		return &PermissionResult{
 			Allowed:      true,
@@ -106,216 +106,216 @@ func (p *Parser) IsAllowed(ctx context.Context, rawURL string) (*PermissionResul
 			Sitemaps:     []string{},
 		}, nil
 	}
-	allowed := robots.TestAgent(rawURL, p.userAgent)
-	var crawlDelay time.Duration
-	if group := robots.FindGroup(p.userAgent); group != nil {
+	Allowed := Robots.TestAgent(RawURL, P.UserAgent)
+	var CrawlDelay time.Duration
+	if Group := Robots.FindGroup(P.UserAgent); Group != nil {
 		// CrawlDelay in robotstxt library is time.Duration in nanoseconds
 		// Convert back to seconds by dividing by time.Second, then multiply back to get clean seconds
-		if group.CrawlDelay > 0 {
-			seconds := int64(group.CrawlDelay / time.Second)
-			crawlDelay = time.Duration(seconds) * time.Second
+		if Group.CrawlDelay > 0 {
+			Seconds := int64(Group.CrawlDelay / time.Second)
+			CrawlDelay = time.Duration(Seconds) * time.Second
 		}
 	}
-	var sitemaps []string
-	if robots.Sitemaps != nil {
-		sitemaps = robots.Sitemaps
+	var Sitemaps []string
+	if Robots.Sitemaps != nil {
+		Sitemaps = Robots.Sitemaps
 	} else {
-		sitemaps = []string{}
+		Sitemaps = []string{}
 	}
-	disallowedBy := ""
-	if !allowed {
-		disallowedBy = "robots.txt disallow rule"
+	DisallowedBy := ""
+	if !Allowed {
+		DisallowedBy = "robots.txt disallow rule"
 	}
 
 	return &PermissionResult{
-		Allowed:      allowed,
-		CrawlDelay:   crawlDelay,
-		DisallowedBy: disallowedBy,
-		Sitemaps:     sitemaps,
+		Allowed:      Allowed,
+		CrawlDelay:   CrawlDelay,
+		DisallowedBy: DisallowedBy,
+		Sitemaps:     Sitemaps,
 	}, nil
 }
 
 // GetRobots fetches and returns robots.txt for a given host
 // Uses caching with 24-hour expiration
-func (p *Parser) GetRobots(ctx context.Context, host string) (*robotstxt.RobotsData, error) {
-	if host == "" {
+func (P *Parser) GetRobots(Ctx context.Context, Host string) (*robotstxt.RobotsData, error) {
+	if Host == "" {
 		return nil, fmt.Errorf("empty host provided")
 	}
-	normalizedHost := host
-	if strings.Contains(host, ":") {
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			normalizedHost = h
+	NormalizedHost := Host
+	if strings.Contains(Host, ":") {
+		if H, _, Err := net.SplitHostPort(Host); Err == nil {
+			NormalizedHost = H
 		}
 	}
-	if robots, found := p.getCachedRobots(normalizedHost); found {
-		return robots, nil
+	if Robots, Found := P.GetCachedRobots(NormalizedHost); Found {
+		return Robots, nil
 	}
-	hostMutex := p.getPerHostMutex(normalizedHost)
-	hostMutex.Lock()
-	defer hostMutex.Unlock()
+	HostMutex := P.GetPerHostMutex(NormalizedHost)
+	HostMutex.Lock()
+	defer HostMutex.Unlock()
 
 	// Check cache again in case another goroutine fetched it while we waited
-	if robots, found := p.getCachedRobots(normalizedHost); found {
-		return robots, nil
+	if Robots, Found := P.GetCachedRobots(NormalizedHost); Found {
+		return Robots, nil
 	}
-	fetchResult, err := p.fetchRobotsFromServer(ctx, host)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch robots.txt for host %q: %w", host, err)
+	FetchResult, Err := P.FetchRobotsFromServer(Ctx, Host)
+	if Err != nil {
+		return nil, fmt.Errorf("failed to fetch robots.txt for host %q: %w", Host, Err)
 	}
 
-	if !fetchResult.Success || fetchResult.Robots == nil {
+	if !FetchResult.Success || FetchResult.Robots == nil {
 		// Create permissive robots.txt for failed fetches
-		permissiveRobots, _ := robotstxt.FromString("")
-		p.setCachedRobots(normalizedHost, permissiveRobots)
-		return permissiveRobots, nil
+		PermissiveRobots, _ := robotstxt.FromString("")
+		P.SetCachedRobots(NormalizedHost, PermissiveRobots)
+		return PermissiveRobots, nil
 	}
-	p.setCachedRobots(normalizedHost, fetchResult.Robots)
-	return fetchResult.Robots, nil
+	P.SetCachedRobots(NormalizedHost, FetchResult.Robots)
+	return FetchResult.Robots, nil
 }
 
-// fetchRobotsFromServer fetches robots.txt from the server for a given host
-func (p *Parser) fetchRobotsFromServer(ctx context.Context, host string) (*FetchResult, error) {
-	start := time.Now()
-	robotsURL := buildRobotsURL(host)
-	if robotsURL == "" {
+// FetchRobotsFromServer fetches robots.txt from the server for a given host
+func (P *Parser) FetchRobotsFromServer(Ctx context.Context, Host string) (*FetchResult, error) {
+	Start := time.Now()
+	RobotsURL := BuildRobotsURL(Host)
+	if RobotsURL == "" {
 		return &FetchResult{
 			Success:      false,
 			Robots:       nil,
-			Error:        fmt.Errorf("failed to build robots.txt URL for host %q", host),
+			Error:        fmt.Errorf("failed to build robots.txt URL for host %q", Host),
 			ResponseCode: 0,
-			FetchTime:    time.Since(start),
+			FetchTime:    time.Since(Start),
 		}, nil
 	}
 
 	// Use the centralized HTTP client
-	resp, err := p.httpClient.Get(ctx, robotsURL)
-	if err != nil {
+	Resp, Err := P.HTTPClient.Get(Ctx, RobotsURL)
+	if Err != nil {
 		return &FetchResult{
 			Success:      false,
 			Robots:       nil,
-			Error:        fmt.Errorf("HTTP request failed: %w", err),
+			Error:        fmt.Errorf("HTTP request failed: %w", Err),
 			ResponseCode: 0,
-			FetchTime:    time.Since(start),
+			FetchTime:    time.Since(Start),
 		}, nil
 	}
-	defer resp.Body.Close()
-	result := &FetchResult{
+	defer Resp.Body.Close()
+	Result := &FetchResult{
 		Success:      false,
 		Robots:       nil,
 		Error:        nil,
-		ResponseCode: resp.StatusCode,
-		FetchTime:    time.Since(start),
+		ResponseCode: Resp.StatusCode,
+		FetchTime:    time.Since(Start),
 	}
 
-	switch resp.StatusCode {
+	switch Resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound, http.StatusForbidden, http.StatusUnauthorized:
-		permissiveRobots, _ := robotstxt.FromString("")
-		result.Success = true
-		result.Robots = permissiveRobots
-		return result, nil
+		PermissiveRobots, _ := robotstxt.FromString("")
+		Result.Success = true
+		Result.Robots = PermissiveRobots
+		return Result, nil
 	default:
-		result.Error = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		return result, nil
+		Result.Error = fmt.Errorf("unexpected status code: %d", Resp.StatusCode)
+		return Result, nil
 	}
-	limitedReader := io.LimitReader(resp.Body, 500*1024) // 500KB limit
-	content, err := io.ReadAll(limitedReader)
-	if err != nil {
-		result.Error = fmt.Errorf("failed to read response body: %w", err)
-		return result, nil
+	LimitedReader := io.LimitReader(Resp.Body, 500*1024) // 500KB limit
+	Content, Err := io.ReadAll(LimitedReader)
+	if Err != nil {
+		Result.Error = fmt.Errorf("failed to read response body: %w", Err)
+		return Result, nil
 	}
-	if len(content) >= 500*1024 {
-		result.Error = fmt.Errorf("robots.txt too large (>500KB)")
-		return result, nil
+	if len(Content) >= 500*1024 {
+		Result.Error = fmt.Errorf("robots.txt too large (>500KB)")
+		return Result, nil
 	}
-	robots, err := parseRobotsContent(content)
-	if err != nil {
-		result.Error = fmt.Errorf("failed to parse robots.txt: %w", err)
-		return result, nil
+	Robots, Err := ParseRobotsContent(Content)
+	if Err != nil {
+		Result.Error = fmt.Errorf("failed to parse robots.txt: %w", Err)
+		return Result, nil
 	}
-	result.Success = true
-	result.Robots = robots
-	return result, nil
+	Result.Success = true
+	Result.Robots = Robots
+	return Result, nil
 }
 
-// getPerHostMutex returns a mutex for the given host to prevent concurrent fetching
-func (p *Parser) getPerHostMutex(host string) *sync.Mutex {
-	p.mutexLock.Lock()
-	defer p.mutexLock.Unlock()
-	if mutex, exists := p.fetchMutex[host]; exists {
-		return mutex
+// GetPerHostMutex returns a mutex for the given host to prevent concurrent fetching
+func (P *Parser) GetPerHostMutex(Host string) *sync.Mutex {
+	P.MutexLock.Lock()
+	defer P.MutexLock.Unlock()
+	if Mutex, Exists := P.FetchMutex[Host]; Exists {
+		return Mutex
 	}
-	mutex := &sync.Mutex{}
-	p.fetchMutex[host] = mutex
-	return mutex
+	Mutex := &sync.Mutex{}
+	P.FetchMutex[Host] = Mutex
+	return Mutex
 }
 
-// isExpired checks if a cache entry has expired
-func (p *Parser) isExpired(entry *CacheEntry) bool {
-	if entry == nil {
+// IsExpired checks if a cache entry has expired
+func (P *Parser) IsExpired(Entry *CacheEntry) bool {
+	if Entry == nil {
 		return true
 	}
-	return time.Now().After(entry.ExpiresAt)
+	return time.Now().After(Entry.ExpiresAt)
 }
 
-// getCachedRobots returns cached robots.txt if it exists and is not expired
-func (p *Parser) getCachedRobots(host string) (*robotstxt.RobotsData, bool) {
-	p.cacheMutex.RLock()
-	defer p.cacheMutex.RUnlock()
-	entry, exists := p.cache[host]
-	if !exists {
+// GetCachedRobots returns cached robots.txt if it exists and is not expired
+func (P *Parser) GetCachedRobots(Host string) (*robotstxt.RobotsData, bool) {
+	P.CacheMutex.RLock()
+	defer P.CacheMutex.RUnlock()
+	Entry, Exists := P.Cache[Host]
+	if !Exists {
 		return nil, false
 	}
-	if p.isExpired(entry) {
+	if P.IsExpired(Entry) {
 		return nil, false
 	}
-	return entry.Robots, true
+	return Entry.Robots, true
 }
 
-// setCachedRobots stores robots.txt in the cache with expiration
-func (p *Parser) setCachedRobots(host string, robots *robotstxt.RobotsData) {
-	p.cacheMutex.Lock()
-	defer p.cacheMutex.Unlock()
-	now := time.Now()
-	entry := &CacheEntry{
-		Robots:    robots,
-		FetchedAt: now,
-		ExpiresAt: now.Add(p.cacheTTL),
+// SetCachedRobots stores robots.txt in the cache with expiration
+func (P *Parser) SetCachedRobots(Host string, Robots *robotstxt.RobotsData) {
+	P.CacheMutex.Lock()
+	defer P.CacheMutex.Unlock()
+	Now := time.Now()
+	Entry := &CacheEntry{
+		Robots:    Robots,
+		FetchedAt: Now,
+		ExpiresAt: Now.Add(P.CacheTTL),
 	}
-	p.cache[host] = entry
+	P.Cache[Host] = Entry
 }
 
 // ClearCache removes all entries from the robots.txt cache
-func (p *Parser) ClearCache() {
-	p.cacheMutex.Lock()
-	defer p.cacheMutex.Unlock()
-	p.cache = make(map[string]*CacheEntry)
+func (P *Parser) ClearCache() {
+	P.CacheMutex.Lock()
+	defer P.CacheMutex.Unlock()
+	P.Cache = make(map[string]*CacheEntry)
 }
 
 // ClearExpired removes expired entries from the cache
-func (p *Parser) ClearExpired() int {
-	p.cacheMutex.Lock()
-	defer p.cacheMutex.Unlock()
-	removedCount := 0
-	for host, entry := range p.cache {
-		if p.isExpired(entry) {
-			delete(p.cache, host)
-			removedCount++
+func (P *Parser) ClearExpired() int {
+	P.CacheMutex.Lock()
+	defer P.CacheMutex.Unlock()
+	RemovedCount := 0
+	for Host, Entry := range P.Cache {
+		if P.IsExpired(Entry) {
+			delete(P.Cache, Host)
+			RemovedCount++
 		}
 	}
-	return removedCount
+	return RemovedCount
 }
 
 // GetCacheStats returns statistics about the robots.txt cache
-func (p *Parser) GetCacheStats() CacheStats {
-	p.cacheMutex.RLock()
-	defer p.cacheMutex.RUnlock()
-	totalEntries := len(p.cache)
-	expiredEntries := 0
-	var oldestEntry, newestEntry time.Time
-	var totalAge time.Duration
+func (P *Parser) GetCacheStats() CacheStats {
+	P.CacheMutex.RLock()
+	defer P.CacheMutex.RUnlock()
+	TotalEntries := len(P.Cache)
+	ExpiredEntries := 0
+	var OldestEntry, NewestEntry time.Time
+	var TotalAge time.Duration
 
-	if totalEntries == 0 {
+	if TotalEntries == 0 {
 		return CacheStats{
 			TotalEntries:   0,
 			ExpiredEntries: 0,
@@ -325,40 +325,40 @@ func (p *Parser) GetCacheStats() CacheStats {
 			AverageAge:     0,
 		}
 	}
-	first := true
-	for _, entry := range p.cache {
-		if p.isExpired(entry) {
-			expiredEntries++
+	First := true
+	for _, Entry := range P.Cache {
+		if P.IsExpired(Entry) {
+			ExpiredEntries++
 		}
 
-		fetchTime := entry.FetchedAt
-		if first {
-			oldestEntry = fetchTime
-			newestEntry = fetchTime
-			first = false
+		FetchTime := Entry.FetchedAt
+		if First {
+			OldestEntry = FetchTime
+			NewestEntry = FetchTime
+			First = false
 		} else {
-			if fetchTime.Before(oldestEntry) {
-				oldestEntry = fetchTime
+			if FetchTime.Before(OldestEntry) {
+				OldestEntry = FetchTime
 			}
-			if fetchTime.After(newestEntry) {
-				newestEntry = fetchTime
+			if FetchTime.After(NewestEntry) {
+				NewestEntry = FetchTime
 			}
 		}
 
-		totalAge += time.Since(fetchTime)
+		TotalAge += time.Since(FetchTime)
 	}
 
-	averageAge := time.Duration(0)
-	if totalEntries > 0 {
-		averageAge = totalAge / time.Duration(totalEntries)
+	AverageAge := time.Duration(0)
+	if TotalEntries > 0 {
+		AverageAge = TotalAge / time.Duration(TotalEntries)
 	}
 	return CacheStats{
-		TotalEntries:   totalEntries,
-		ExpiredEntries: expiredEntries,
-		OldestEntry:    oldestEntry,
-		NewestEntry:    newestEntry,
+		TotalEntries:   TotalEntries,
+		ExpiredEntries: ExpiredEntries,
+		OldestEntry:    OldestEntry,
+		NewestEntry:    NewestEntry,
 		CacheHitRate:   0.0, // Not tracking hits/misses yet
-		AverageAge:     averageAge,
+		AverageAge:     AverageAge,
 	}
 }
 
@@ -372,65 +372,65 @@ type CacheStats struct {
 	AverageAge     time.Duration // Average age of cache entries
 }
 
-// buildRobotsURL constructs the robots.txt URL for a given host
-func buildRobotsURL(host string) string {
-	host = strings.TrimSpace(host)
+// BuildRobotsURL constructs the robots.txt URL for a given host
+func BuildRobotsURL(Host string) string {
+	Host = strings.TrimSpace(Host)
 
-	if host == "" {
+	if Host == "" {
 		return ""
 	}
 
 	// Ensure host has a scheme
-	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
-		host = "http://" + host
+	if !strings.HasPrefix(Host, "http://") && !strings.HasPrefix(Host, "https://") {
+		Host = "http://" + Host
 	}
 
 	// Use frontier URL parsing utilities
-	u, err := frontier.ParseURL(host)
-	if err != nil {
+	U, Err := frontier.ParseURL(Host)
+	if Err != nil {
 		// Fallback for invalid URLs
-		if !strings.HasSuffix(host, "/") {
-			host += "/"
+		if !strings.HasSuffix(Host, "/") {
+			Host += "/"
 		}
-		return host + "robots.txt"
+		return Host + "robots.txt"
 	}
-	
-	u.Path = "/robots.txt"
-	u.RawQuery = ""
-	u.Fragment = ""
 
-	return u.String()
+	U.Path = "/robots.txt"
+	U.RawQuery = ""
+	U.Fragment = ""
+
+	return U.String()
 }
 
-// parseRobotsContent parses robots.txt content and returns RobotsData
-func parseRobotsContent(content []byte) (*robotstxt.RobotsData, error) {
-	if len(content) == 0 {
-		r, _ := robotstxt.FromString("") // ignore error, empty string is valid
-		return r, nil
+// ParseRobotsContent parses robots.txt content and returns RobotsData
+func ParseRobotsContent(Content []byte) (*robotstxt.RobotsData, error) {
+	if len(Content) == 0 {
+		R, _ := robotstxt.FromString("") // ignore error, empty string is valid
+		return R, nil
 	}
-	r, err := robotstxt.FromBytes(content)
-	if err != nil {
-		r, _ = robotstxt.FromString("")
-		return r, fmt.Errorf("failed to parse robots.txt, returning permissive: %w", err)
-	}
-
-	if r == nil {
-		r, _ = robotstxt.FromString("")
-		return r, fmt.Errorf("robots.txt parsing returned nil data, returning permissive")
+	R, Err := robotstxt.FromBytes(Content)
+	if Err != nil {
+		R, _ = robotstxt.FromString("")
+		return R, fmt.Errorf("failed to parse robots.txt, returning permissive: %w", Err)
 	}
 
-	return r, nil
+	if R == nil {
+		R, _ = robotstxt.FromString("")
+		return R, fmt.Errorf("robots.txt parsing returned nil data, returning permissive")
+	}
+
+	return R, nil
 }
 
 // Close gracefully shuts down the parser and cleans up resources
-func (p *Parser) Close() error {
-	p.ClearCache()
-	if p.httpClient != nil {
-		p.httpClient.Close()
+func (P *Parser) Close() error {
+	P.ClearCache()
+	if P.HTTPClient != nil {
+		P.HTTPClient.Close()
 	}
-	p.mutexLock.Lock()
-	p.fetchMutex = make(map[string]*sync.Mutex)
-	p.mutexLock.Unlock()
+	P.MutexLock.Lock()
+	P.FetchMutex = make(map[string]*sync.Mutex)
+	P.MutexLock.Unlock()
 
 	return nil
 }

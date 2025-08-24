@@ -18,7 +18,7 @@ import (
 
 // Mock robots.txt content for testing
 const (
-	sampleRobotsTxt = `User-agent: *
+	SampleRobotsTxt = `User-agent: *
 Disallow: /private/
 Disallow: /temp/
 Allow: /public/
@@ -30,592 +30,592 @@ Crawl-delay: 1
 Sitemap: https://example.com/sitemap.xml
 `
 
-	strictRobotsTxt = `User-agent: *
+	StrictRobotsTxt = `User-agent: *
 Disallow: /
 `
 
-	emptyRobotsTxt = ``
+	EmptyRobotsTxt = ``
 
-	permissiveRobotsTxt = `User-agent: *
+	PermissiveRobotsTxt = `User-agent: *
 Allow: /
 `
 )
 
-func createTestParser() *Parser {
-	robotsConfig := Config{
+func CreateTestParser() *Parser {
+	RobotsConfig := Config{
 		UserAgent:   "TestCrawler/1.0",
 		CacheTTL:    24 * time.Hour,
 		HTTPTimeout: 5 * time.Second,
 		MaxSize:     500 * 1024, // 500KB
 	}
-	
+
 	// Create HTTP client for testing
-	httpConfig := &config.HTTPConfig{
+	HTTPConfig := &config.HTTPConfig{
 		MaxIdleConnections:        100,
 		MaxIdleConnectionsPerHost: 10,
 		IdleConnectionTimeout:     30 * time.Second,
 		DisableKeepAlives:         false,
 		Timeout:                   5 * time.Second,
 		DialTimeout:               3 * time.Second,
-		TLSHandshakeTimeout:       5 * time.Second,
+		TlsHandshakeTimeout:       5 * time.Second,
 		ResponseHeaderTimeout:     5 * time.Second,
 		DisableCompression:        false,
 		AcceptEncoding:            "gzip, deflate",
 	}
-	
-	logger, _ := zap.NewDevelopment()
-	httpClient := client.NewHTTPClient(httpConfig, logger)
-	
-	return NewParser(robotsConfig, httpClient)
+
+	Logger, _ := zap.NewDevelopment()
+	HTTPClient := client.NewHTTPClient(HTTPConfig, Logger)
+
+	return NewParser(RobotsConfig, HTTPClient)
 }
 
 func TestNewParser(t *testing.T) {
-	tests := []struct {
-		name            string
-		config          Config
-		expectedUA      string
-		expectedTTL     time.Duration
-		expectedTimeout time.Duration
-		expectedMaxSize int64
+	Tests := []struct {
+		Name            string
+		Config          Config
+		ExpectedUA      string
+		ExpectedTTL     time.Duration
+		ExpectedTimeout time.Duration
+		ExpectedMaxSize int64
 	}{
 		{
-			name:            "default values",
-			config:          Config{},
-			expectedUA:      "*",
-			expectedTTL:     24 * time.Hour,
-			expectedTimeout: 30 * time.Second,
-			expectedMaxSize: 500 * 1024,
+			Name:            "default values",
+			Config:          Config{},
+			ExpectedUA:      "*",
+			ExpectedTTL:     24 * time.Hour,
+			ExpectedTimeout: 30 * time.Second,
+			ExpectedMaxSize: 500 * 1024,
 		},
 		{
-			name: "custom values",
-			config: Config{
+			Name: "custom values",
+			Config: Config{
 				UserAgent:   "CustomBot/2.0",
 				CacheTTL:    1 * time.Hour,
 				HTTPTimeout: 10 * time.Second,
 				MaxSize:     1024 * 1024,
 			},
-			expectedUA:      "CustomBot/2.0",
-			expectedTTL:     1 * time.Hour,
-			expectedTimeout: 10 * time.Second,
-			expectedMaxSize: 1024 * 1024,
+			ExpectedUA:      "CustomBot/2.0",
+			ExpectedTTL:     1 * time.Hour,
+			ExpectedTimeout: 10 * time.Second,
+			ExpectedMaxSize: 1024 * 1024,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, TT := range Tests {
+		t.Run(TT.Name, func(t *testing.T) {
 			// Create HTTP client for test
-			httpConfig := &config.HTTPConfig{
-				Timeout: tt.expectedTimeout,
+			HTTPConfig := &config.HTTPConfig{
+				Timeout: TT.ExpectedTimeout,
 			}
-			logger, _ := zap.NewDevelopment()
-			httpClient := client.NewHTTPClient(httpConfig, logger)
-			
-			parser := NewParser(tt.config, httpClient)
+			Logger, _ := zap.NewDevelopment()
+			HTTPClient := client.NewHTTPClient(HTTPConfig, Logger)
 
-			assert.NotNil(t, parser)
-			assert.Equal(t, tt.expectedUA, parser.userAgent)
-			assert.Equal(t, tt.expectedTTL, parser.cacheTTL)
-			assert.NotNil(t, parser.cache)
-			assert.NotNil(t, parser.fetchMutex)
+			Parser := NewParser(TT.Config, HTTPClient)
+
+			assert.NotNil(t, Parser)
+			assert.Equal(t, TT.ExpectedUA, Parser.UserAgent)
+			assert.Equal(t, TT.ExpectedTTL, Parser.CacheTTL)
+			assert.NotNil(t, Parser.Cache)
+			assert.NotNil(t, Parser.FetchMutex)
 		})
 	}
 }
 
 func TestIsAllowed(t *testing.T) {
-	tests := []struct {
-		name               string
-		robotsTxt          string
-		statusCode         int
-		url                string
-		userAgent          string
-		expectedAllowed    bool
-		expectedCrawlDelay time.Duration
-		wantErr            bool
+	Tests := []struct {
+		Name               string
+		RobotsTxt          string
+		StatusCode         int
+		URL                string
+		UserAgent          string
+		ExpectedAllowed    bool
+		ExpectedCrawlDelay time.Duration
+		WantErr            bool
 	}{
 		{
-			name:               "allowed URL with permissive robots.txt",
-			robotsTxt:          permissiveRobotsTxt,
-			statusCode:         200,
-			url:                "https://example.com/public/page.html",
-			userAgent:          "TestBot/1.0",
-			expectedAllowed:    true,
-			expectedCrawlDelay: 0,
-			wantErr:            false,
+			Name:               "allowed URL with permissive robots.txt",
+			RobotsTxt:          PermissiveRobotsTxt,
+			StatusCode:         200,
+			URL:                "https://example.com/public/page.html",
+			UserAgent:          "TestBot/1.0",
+			ExpectedAllowed:    true,
+			ExpectedCrawlDelay: 0,
+			WantErr:            false,
 		},
 		{
-			name:               "disallowed URL with strict robots.txt",
-			robotsTxt:          strictRobotsTxt,
-			statusCode:         200,
-			url:                "https://example.com/any-page.html",
-			userAgent:          "TestBot/1.0",
-			expectedAllowed:    false,
-			expectedCrawlDelay: 0,
-			wantErr:            false,
+			Name:               "disallowed URL with strict robots.txt",
+			RobotsTxt:          StrictRobotsTxt,
+			StatusCode:         200,
+			URL:                "https://example.com/any-page.html",
+			UserAgent:          "TestBot/1.0",
+			ExpectedAllowed:    false,
+			ExpectedCrawlDelay: 0,
+			WantErr:            false,
 		},
 		{
-			name:               "404 robots.txt - should be permissive",
-			robotsTxt:          "",
-			statusCode:         404,
-			url:                "https://example.com/any-page.html",
-			userAgent:          "TestBot/1.0",
-			expectedAllowed:    true,
-			expectedCrawlDelay: 0,
-			wantErr:            false,
+			Name:               "404 robots.txt - should be permissive",
+			RobotsTxt:          "",
+			StatusCode:         404,
+			URL:                "https://example.com/any-page.html",
+			UserAgent:          "TestBot/1.0",
+			ExpectedAllowed:    true,
+			ExpectedCrawlDelay: 0,
+			WantErr:            false,
 		},
 		{
-			name:               "empty URL",
-			robotsTxt:          sampleRobotsTxt,
-			statusCode:         200,
-			url:                "",
-			userAgent:          "TestBot/1.0",
-			expectedAllowed:    false,
-			expectedCrawlDelay: 0,
-			wantErr:            true,
+			Name:               "empty URL",
+			RobotsTxt:          SampleRobotsTxt,
+			StatusCode:         200,
+			URL:                "",
+			UserAgent:          "TestBot/1.0",
+			ExpectedAllowed:    false,
+			ExpectedCrawlDelay: 0,
+			WantErr:            true,
 		},
 		{
-			name:               "specific user agent with crawl delay",
-			robotsTxt:          sampleRobotsTxt,
-			statusCode:         200,
-			url:                "https://example.com/public/page.html",
-			userAgent:          "TestCrawler",
-			expectedAllowed:    true,
-			expectedCrawlDelay: 1 * time.Second,
-			wantErr:            false,
+			Name:               "specific user agent with crawl delay",
+			RobotsTxt:          SampleRobotsTxt,
+			StatusCode:         200,
+			URL:                "https://example.com/public/page.html",
+			UserAgent:          "TestCrawler",
+			ExpectedAllowed:    true,
+			ExpectedCrawlDelay: 1 * time.Second,
+			WantErr:            false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/robots.txt" {
-					w.WriteHeader(tt.statusCode)
-					if tt.statusCode == 200 {
-						w.Write([]byte(tt.robotsTxt))
+	for _, TT := range Tests {
+		t.Run(TT.Name, func(t *testing.T) {
+			Server := httptest.NewServer(http.HandlerFunc(func(W http.ResponseWriter, R *http.Request) {
+				if R.URL.Path == "/robots.txt" {
+					W.WriteHeader(TT.StatusCode)
+					if TT.StatusCode == 200 {
+						W.Write([]byte(TT.RobotsTxt))
 					}
 				} else {
-					w.WriteHeader(404)
+					W.WriteHeader(404)
 				}
 			}))
-			defer server.Close()
+			defer Server.Close()
 
-			robotsConfig := Config{
-				UserAgent:   tt.userAgent,
+			RobotsConfig := Config{
+				UserAgent:   TT.UserAgent,
 				CacheTTL:    1 * time.Minute, // Short TTL for testing
 				HTTPTimeout: 5 * time.Second,
 			}
-			httpConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
-			logger, _ := zap.NewDevelopment()
-			httpClient := client.NewHTTPClient(httpConfig, logger)
-			parser := NewParser(robotsConfig, httpClient)
+			HTTPConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
+			Logger, _ := zap.NewDevelopment()
+			HTTPClient := client.NewHTTPClient(HTTPConfig, Logger)
+			Parser := NewParser(RobotsConfig, HTTPClient)
 
-			testURL := tt.url
-			if testURL != "" {
-				testURL = strings.Replace(testURL, "https://example.com", server.URL, 1)
+			TestURL := TT.URL
+			if TestURL != "" {
+				TestURL = strings.Replace(TestURL, "https://example.com", Server.URL, 1)
 			}
 
-			ctx := context.Background()
-			result, err := parser.IsAllowed(ctx, testURL)
+			Ctx := context.Background()
+			Result, Err := Parser.IsAllowed(Ctx, TestURL)
 
-			if tt.wantErr {
-				assert.Error(t, err)
+			if TT.WantErr {
+				assert.Error(t, Err)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.Equal(t, tt.expectedAllowed, result.Allowed)
-			assert.Equal(t, tt.expectedCrawlDelay, result.CrawlDelay)
-			assert.NotNil(t, result.Sitemaps)
+			require.NoError(t, Err)
+			require.NotNil(t, Result)
+			assert.Equal(t, TT.ExpectedAllowed, Result.Allowed)
+			assert.Equal(t, TT.ExpectedCrawlDelay, Result.CrawlDelay)
+			assert.NotNil(t, Result.Sitemaps)
 
-			if !result.Allowed {
-				assert.NotEmpty(t, result.DisallowedBy)
+			if !Result.Allowed {
+				assert.NotEmpty(t, Result.DisallowedBy)
 			} else {
-				assert.Empty(t, result.DisallowedBy)
+				assert.Empty(t, Result.DisallowedBy)
 			}
 		})
 	}
 }
 
 func TestGetRobots(t *testing.T) {
-	tests := []struct {
-		name       string
-		robotsTxt  string
-		statusCode int
-		host       string
-		wantErr    bool
+	Tests := []struct {
+		Name       string
+		RobotsTxt  string
+		StatusCode int
+		Host       string
+		WantErr    bool
 	}{
 		{
-			name:       "successful fetch",
-			robotsTxt:  sampleRobotsTxt,
-			statusCode: 200,
-			host:       "example.com",
-			wantErr:    false,
+			Name:       "successful fetch",
+			RobotsTxt:  SampleRobotsTxt,
+			StatusCode: 200,
+			Host:       "example.com",
+			WantErr:    false,
 		},
 		{
-			name:       "404 not found",
-			robotsTxt:  "",
-			statusCode: 404,
-			host:       "example.com",
-			wantErr:    false, // 404 should not be an error - returns permissive robots
+			Name:       "404 not found",
+			RobotsTxt:  "",
+			StatusCode: 404,
+			Host:       "example.com",
+			WantErr:    false, // 404 should not be an error - returns permissive robots
 		},
 		{
-			name:       "empty host",
-			robotsTxt:  sampleRobotsTxt,
-			statusCode: 200,
-			host:       "",
-			wantErr:    true,
+			Name:       "empty host",
+			RobotsTxt:  SampleRobotsTxt,
+			StatusCode: 200,
+			Host:       "",
+			WantErr:    true,
 		},
 		{
-			name:       "host with port",
-			robotsTxt:  sampleRobotsTxt,
-			statusCode: 200,
-			host:       "example.com:8080",
-			wantErr:    false,
+			Name:       "host with port",
+			RobotsTxt:  SampleRobotsTxt,
+			StatusCode: 200,
+			Host:       "example.com:8080",
+			WantErr:    false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/robots.txt" {
-					w.WriteHeader(tt.statusCode)
-					if tt.statusCode == 200 {
-						w.Write([]byte(tt.robotsTxt))
+	for _, TT := range Tests {
+		t.Run(TT.Name, func(t *testing.T) {
+			Server := httptest.NewServer(http.HandlerFunc(func(W http.ResponseWriter, R *http.Request) {
+				if R.URL.Path == "/robots.txt" {
+					W.WriteHeader(TT.StatusCode)
+					if TT.StatusCode == 200 {
+						W.Write([]byte(TT.RobotsTxt))
 					}
 				}
 			}))
-			defer server.Close()
+			defer Server.Close()
 
-			parser := createTestParser()
-			ctx := context.Background()
+			Parser := CreateTestParser()
+			Ctx := context.Background()
 
-			testHost := tt.host
-			if testHost != "" && testHost != "example.com" && testHost != "example.com:8080" {
-				testHost = tt.host
-			} else if testHost != "" {
-				serverURL := strings.TrimPrefix(server.URL, "http://")
-				if strings.Contains(testHost, ":") {
-					testHost = serverURL
+			TestHost := TT.Host
+			if TestHost != "" && TestHost != "example.com" && TestHost != "example.com:8080" {
+				TestHost = TT.Host
+			} else if TestHost != "" {
+				ServerURL := strings.TrimPrefix(Server.URL, "http://")
+				if strings.Contains(TestHost, ":") {
+					TestHost = ServerURL
 				} else {
-					testHost = strings.Split(serverURL, ":")[0]
+					TestHost = strings.Split(ServerURL, ":")[0]
 				}
 			}
 
-			robots, err := parser.GetRobots(ctx, testHost)
+			Robots, Err := Parser.GetRobots(Ctx, TestHost)
 
-			if tt.wantErr {
-				assert.Error(t, err)
+			if TT.WantErr {
+				assert.Error(t, Err)
 				return
 			}
 
-			require.NoError(t, err)
-			assert.NotNil(t, robots)
+			require.NoError(t, Err)
+			assert.NotNil(t, Robots)
 		})
 	}
 }
 
 func TestCaching(t *testing.T) {
-	requestCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/robots.txt" {
-			requestCount++
-			w.WriteHeader(200)
-			w.Write([]byte(sampleRobotsTxt))
+	RequestCount := 0
+	Server := httptest.NewServer(http.HandlerFunc(func(W http.ResponseWriter, R *http.Request) {
+		if R.URL.Path == "/robots.txt" {
+			RequestCount++
+			W.WriteHeader(200)
+			W.Write([]byte(SampleRobotsTxt))
 		}
 	}))
-	defer server.Close()
+	defer Server.Close()
 
 	// Create parser with short TTL for testing
-	robotsConfig := Config{
+	RobotsConfig := Config{
 		UserAgent:   "TestBot/1.0",
 		CacheTTL:    100 * time.Millisecond,
 		HTTPTimeout: 5 * time.Second,
 	}
-	httpConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
-	logger, _ := zap.NewDevelopment()
-	httpClient := client.NewHTTPClient(httpConfig, logger)
-	parser := NewParser(robotsConfig, httpClient)
+	HTTPConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
+	Logger, _ := zap.NewDevelopment()
+	HTTPClient := client.NewHTTPClient(HTTPConfig, Logger)
+	Parser := NewParser(RobotsConfig, HTTPClient)
 
-	ctx := context.Background()
-	host := strings.TrimPrefix(server.URL, "http://")
+	Ctx := context.Background()
+	Host := strings.TrimPrefix(Server.URL, "http://")
 
-	robots1, err := parser.GetRobots(ctx, host)
-	require.NoError(t, err)
-	assert.NotNil(t, robots1)
-	assert.Equal(t, 1, requestCount, "First request should fetch from server")
+	Robots1, Err := Parser.GetRobots(Ctx, Host)
+	require.NoError(t, Err)
+	assert.NotNil(t, Robots1)
+	assert.Equal(t, 1, RequestCount, "First request should fetch from server")
 
-	robots2, err := parser.GetRobots(ctx, host)
-	require.NoError(t, err)
-	assert.NotNil(t, robots2)
-	assert.Equal(t, 1, requestCount, "Second request should use cache")
+	Robots2, Err := Parser.GetRobots(Ctx, Host)
+	require.NoError(t, Err)
+	assert.NotNil(t, Robots2)
+	assert.Equal(t, 1, RequestCount, "Second request should use cache")
 
 	time.Sleep(150 * time.Millisecond)
 
-	robots3, err := parser.GetRobots(ctx, host)
-	require.NoError(t, err)
-	assert.NotNil(t, robots3)
-	assert.Equal(t, 2, requestCount, "Third request after expiry should fetch from server")
+	Robots3, Err := Parser.GetRobots(Ctx, Host)
+	require.NoError(t, Err)
+	assert.NotNil(t, Robots3)
+	assert.Equal(t, 2, RequestCount, "Third request after expiry should fetch from server")
 }
 
 func TestCacheOperations(t *testing.T) {
-	parser := createTestParser()
+	Parser := CreateTestParser()
 
-	stats := parser.GetCacheStats()
-	assert.Equal(t, 0, stats.TotalEntries)
-	assert.Equal(t, 0, stats.ExpiredEntries)
+	Stats := Parser.GetCacheStats()
+	assert.Equal(t, 0, Stats.TotalEntries)
+	assert.Equal(t, 0, Stats.ExpiredEntries)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte(sampleRobotsTxt))
+	Server := httptest.NewServer(http.HandlerFunc(func(W http.ResponseWriter, R *http.Request) {
+		W.WriteHeader(200)
+		W.Write([]byte(SampleRobotsTxt))
 	}))
-	defer server.Close()
+	defer Server.Close()
 
-	ctx := context.Background()
-	host := strings.TrimPrefix(server.URL, "http://")
+	Ctx := context.Background()
+	Host := strings.TrimPrefix(Server.URL, "http://")
 
-	_, err := parser.GetRobots(ctx, host)
-	require.NoError(t, err)
+	_, Err := Parser.GetRobots(Ctx, Host)
+	require.NoError(t, Err)
 
-	stats = parser.GetCacheStats()
-	assert.Equal(t, 1, stats.TotalEntries)
-	assert.Equal(t, 0, stats.ExpiredEntries)
-	assert.False(t, stats.OldestEntry.IsZero())
-	assert.False(t, stats.NewestEntry.IsZero())
+	Stats = Parser.GetCacheStats()
+	assert.Equal(t, 1, Stats.TotalEntries)
+	assert.Equal(t, 0, Stats.ExpiredEntries)
+	assert.False(t, Stats.OldestEntry.IsZero())
+	assert.False(t, Stats.NewestEntry.IsZero())
 
-	parser.ClearCache()
-	stats = parser.GetCacheStats()
-	assert.Equal(t, 0, stats.TotalEntries)
+	Parser.ClearCache()
+	Stats = Parser.GetCacheStats()
+	assert.Equal(t, 0, Stats.TotalEntries)
 }
 
 func TestClearExpired(t *testing.T) {
 	// Create parser with very short TTL
-	robotsConfig := Config{
+	RobotsConfig := Config{
 		UserAgent:   "TestBot/1.0",
 		CacheTTL:    1 * time.Millisecond,
 		HTTPTimeout: 5 * time.Second,
 	}
-	httpConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
-	logger, _ := zap.NewDevelopment()
-	httpClient := client.NewHTTPClient(httpConfig, logger)
-	parser := NewParser(robotsConfig, httpClient)
+	HTTPConfig := &config.HTTPConfig{Timeout: 5 * time.Second}
+	Logger, _ := zap.NewDevelopment()
+	HTTPClient := client.NewHTTPClient(HTTPConfig, Logger)
+	Parser := NewParser(RobotsConfig, HTTPClient)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte(sampleRobotsTxt))
+	Server := httptest.NewServer(http.HandlerFunc(func(W http.ResponseWriter, R *http.Request) {
+		W.WriteHeader(200)
+		W.Write([]byte(SampleRobotsTxt))
 	}))
-	defer server.Close()
+	defer Server.Close()
 
-	ctx := context.Background()
-	host := strings.TrimPrefix(server.URL, "http://")
+	Ctx := context.Background()
+	Host := strings.TrimPrefix(Server.URL, "http://")
 
-	_, err := parser.GetRobots(ctx, host)
-	require.NoError(t, err)
+	_, Err := Parser.GetRobots(Ctx, Host)
+	require.NoError(t, Err)
 
 	time.Sleep(5 * time.Millisecond)
 
-	removedCount := parser.ClearExpired()
-	assert.Equal(t, 1, removedCount)
+	RemovedCount := Parser.ClearExpired()
+	assert.Equal(t, 1, RemovedCount)
 
-	stats := parser.GetCacheStats()
-	assert.Equal(t, 0, stats.TotalEntries)
+	Stats := Parser.GetCacheStats()
+	assert.Equal(t, 0, Stats.TotalEntries)
 }
 
 func TestExtractHostFromURL(t *testing.T) {
-	tests := []struct {
-		name         string
-		url          string
-		expectedHost string
-		wantErr      bool
+	Tests := []struct {
+		Name         string
+		URL          string
+		ExpectedHost string
+		WantErr      bool
 	}{
 		{
-			name:         "valid HTTP URL",
-			url:          "http://example.com/path",
-			expectedHost: "example.com",
-			wantErr:      false,
+			Name:         "valid HTTP URL",
+			URL:          "http://example.com/path",
+			ExpectedHost: "example.com",
+			WantErr:      false,
 		},
 		{
-			name:         "valid HTTPS URL",
-			url:          "https://subdomain.example.com:8080/path",
-			expectedHost: "subdomain.example.com:8080",
-			wantErr:      false,
+			Name:         "valid HTTPS URL",
+			URL:          "https://subdomain.example.com:8080/path",
+			ExpectedHost: "subdomain.example.com:8080",
+			WantErr:      false,
 		},
 		{
-			name:         "URL without scheme",
-			url:          "example.com/path",
-			expectedHost: "example.com",
-			wantErr:      false,
+			Name:         "URL without scheme",
+			URL:          "example.com/path",
+			ExpectedHost: "example.com",
+			WantErr:      false,
 		},
 		{
-			name:         "empty URL",
-			url:          "",
-			expectedHost: "",
-			wantErr:      true,
+			Name:         "empty URL",
+			URL:          "",
+			ExpectedHost: "",
+			WantErr:      true,
 		},
 		{
-			name:         "invalid URL",
-			url:          "://invalid",
-			expectedHost: "",
-			wantErr:      true,
+			Name:         "invalid URL",
+			URL:          "://invalid",
+			ExpectedHost: "",
+			WantErr:      true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			host, err := frontier.ExtractHostFromURL(tt.url)
+	for _, TT := range Tests {
+		t.Run(TT.Name, func(t *testing.T) {
+			Host, Err := frontier.ExtractHostFromURL(TT.URL)
 
-			if tt.wantErr {
-				assert.Error(t, err)
+			if TT.WantErr {
+				assert.Error(t, Err)
 				return
 			}
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedHost, host)
+			require.NoError(t, Err)
+			assert.Equal(t, TT.ExpectedHost, Host)
 		})
 	}
 }
 
 func TestBuildRobotsURL(t *testing.T) {
-	tests := []struct {
-		name        string
-		host        string
-		expectedURL string
+	Tests := []struct {
+		Name        string
+		Host        string
+		ExpectedURL string
 	}{
 		{
-			name:        "simple host",
-			host:        "example.com",
-			expectedURL: "http://example.com/robots.txt",
+			Name:        "simple host",
+			Host:        "example.com",
+			ExpectedURL: "http://example.com/robots.txt",
 		},
 		{
-			name:        "host with HTTP scheme",
-			host:        "http://example.com",
-			expectedURL: "http://example.com/robots.txt",
+			Name:        "host with HTTP scheme",
+			Host:        "http://example.com",
+			ExpectedURL: "http://example.com/robots.txt",
 		},
 		{
-			name:        "host with HTTPS scheme",
-			host:        "https://example.com",
-			expectedURL: "https://example.com/robots.txt",
+			Name:        "host with HTTPS scheme",
+			Host:        "https://example.com",
+			ExpectedURL: "https://example.com/robots.txt",
 		},
 		{
-			name:        "host with port",
-			host:        "example.com:8080",
-			expectedURL: "http://example.com:8080/robots.txt",
+			Name:        "host with port",
+			Host:        "example.com:8080",
+			ExpectedURL: "http://example.com:8080/robots.txt",
 		},
 		{
-			name:        "empty host",
-			host:        "",
-			expectedURL: "",
+			Name:        "empty host",
+			Host:        "",
+			ExpectedURL: "",
 		},
 		{
-			name:        "host with path (should be normalized)",
-			host:        "http://example.com/some/path",
-			expectedURL: "http://example.com/robots.txt",
+			Name:        "host with path (should be normalized)",
+			Host:        "http://example.com/some/path",
+			ExpectedURL: "http://example.com/robots.txt",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			url := buildRobotsURL(tt.host)
-			assert.Equal(t, tt.expectedURL, url)
+	for _, TT := range Tests {
+		t.Run(TT.Name, func(t *testing.T) {
+			URL := BuildRobotsURL(TT.Host)
+			assert.Equal(t, TT.ExpectedURL, URL)
 		})
 	}
 }
 
 func TestParseRobotsContent(t *testing.T) {
-	tests := []struct {
-		name      string
-		content   []byte
-		wantErr   bool
-		expectNil bool
+	Tests := []struct {
+		Name      string
+		Content   []byte
+		WantErr   bool
+		ExpectNil bool
 	}{
 		{
-			name:      "valid robots.txt",
-			content:   []byte(sampleRobotsTxt),
-			wantErr:   false,
-			expectNil: false,
+			Name:      "valid robots.txt",
+			Content:   []byte(SampleRobotsTxt),
+			WantErr:   false,
+			ExpectNil: false,
 		},
 		{
-			name:      "empty content",
-			content:   []byte{},
-			wantErr:   false,
-			expectNil: false,
+			Name:      "empty content",
+			Content:   []byte{},
+			WantErr:   false,
+			ExpectNil: false,
 		},
 		{
-			name:      "invalid content (should fallback to permissive)",
-			content:   []byte("invalid robots content\x00\x01"),
-			wantErr:   false, // Should not error, returns permissive robots
-			expectNil: false,
+			Name:      "invalid content (should fallback to permissive)",
+			Content:   []byte("invalid robots content\x00\x01"),
+			WantErr:   false, // Should not error, returns permissive robots
+			ExpectNil: false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			robots, err := parseRobotsContent(tt.content)
+	for _, TT := range Tests {
+		t.Run(TT.Name, func(t *testing.T) {
+			Robots, Err := ParseRobotsContent(TT.Content)
 
-			if tt.expectNil {
-				assert.Nil(t, robots)
+			if TT.ExpectNil {
+				assert.Nil(t, Robots)
 			} else {
-				assert.NotNil(t, robots)
+				assert.NotNil(t, Robots)
 			}
 
-			if tt.wantErr {
-				assert.Error(t, err)
+			if TT.WantErr {
+				assert.Error(t, Err)
 			}
 		})
 	}
 }
 
 func TestClose(t *testing.T) {
-	parser := createTestParser()
+	Parser := CreateTestParser()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte(sampleRobotsTxt))
+	Server := httptest.NewServer(http.HandlerFunc(func(W http.ResponseWriter, R *http.Request) {
+		W.WriteHeader(200)
+		W.Write([]byte(SampleRobotsTxt))
 	}))
-	defer server.Close()
+	defer Server.Close()
 
-	ctx := context.Background()
-	host := strings.TrimPrefix(server.URL, "http://")
+	Ctx := context.Background()
+	Host := strings.TrimPrefix(Server.URL, "http://")
 
-	_, err := parser.GetRobots(ctx, host)
-	require.NoError(t, err)
+	_, Err := Parser.GetRobots(Ctx, Host)
+	require.NoError(t, Err)
 
-	stats := parser.GetCacheStats()
-	assert.Equal(t, 1, stats.TotalEntries)
+	Stats := Parser.GetCacheStats()
+	assert.Equal(t, 1, Stats.TotalEntries)
 
-	err = parser.Close()
-	assert.NoError(t, err)
+	Err = Parser.Close()
+	assert.NoError(t, Err)
 
-	stats = parser.GetCacheStats()
-	assert.Equal(t, 0, stats.TotalEntries)
+	Stats = Parser.GetCacheStats()
+	assert.Equal(t, 0, Stats.TotalEntries)
 }
 
 func TestConcurrentAccess(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	Server := httptest.NewServer(http.HandlerFunc(func(W http.ResponseWriter, R *http.Request) {
 		time.Sleep(10 * time.Millisecond)
-		w.WriteHeader(200)
-		w.Write([]byte(sampleRobotsTxt))
+		W.WriteHeader(200)
+		W.Write([]byte(SampleRobotsTxt))
 	}))
-	defer server.Close()
+	defer Server.Close()
 
-	parser := createTestParser()
-	ctx := context.Background()
-	host := strings.TrimPrefix(server.URL, "http://")
+	Parser := CreateTestParser()
+	Ctx := context.Background()
+	Host := strings.TrimPrefix(Server.URL, "http://")
 
-	const numGoroutines = 10
-	results := make(chan error, numGoroutines)
+	const NumGoroutines = 10
+	Results := make(chan error, NumGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for I := 0; I < NumGoroutines; I++ {
 		go func() {
-			_, err := parser.GetRobots(ctx, host)
-			results <- err
+			_, Err := Parser.GetRobots(Ctx, Host)
+			Results <- Err
 		}()
 	}
 
-	for i := 0; i < numGoroutines; i++ {
-		err := <-results
-		assert.NoError(t, err)
+	for I := 0; I < NumGoroutines; I++ {
+		Err := <-Results
+		assert.NoError(t, Err)
 	}
 
-	stats := parser.GetCacheStats()
-	assert.Equal(t, 1, stats.TotalEntries)
+	Stats := Parser.GetCacheStats()
+	assert.Equal(t, 1, Stats.TotalEntries)
 }

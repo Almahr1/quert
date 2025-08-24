@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Config represents the complete application configuration
+// config represents the complete application configuration
 type Config struct {
 	// Crawler settings
 	Crawler CrawlerConfig `mapstructure:"crawler" yaml:"crawler" json:"crawler"`
@@ -53,7 +53,7 @@ type Config struct {
 	configFileUsed string `json:"-" yaml:"-"`
 }
 
-// CrawlerConfig holds basic crawler settings
+// crawlerConfig holds basic crawler settings
 type CrawlerConfig struct {
 	MaxPages          int           `mapstructure:"max_pages" yaml:"max_pages" json:"max_pages"`
 	MaxDepth          int           `mapstructure:"max_depth" yaml:"max_depth" json:"max_depth"`
@@ -67,7 +67,7 @@ type CrawlerConfig struct {
 	BlockedDomains    []string      `mapstructure:"blocked_domains" yaml:"blocked_domains" json:"blocked_domains"`
 }
 
-// RateLimitConfig holds rate limiting settings
+// rateLimitConfig holds rate limiting settings
 type RateLimitConfig struct {
 	RequestsPerSecond float64       `mapstructure:"requests_per_second" yaml:"requests_per_second" json:"requests_per_second"`
 	Burst             int           `mapstructure:"burst" yaml:"burst" json:"burst"`
@@ -80,7 +80,7 @@ type RateLimitConfig struct {
 	MaxRequests       int           `mapstructure:"max_requests" yaml:"max_requests" json:"max_requests"`
 }
 
-// ContentConfig holds content processing settings
+// contentConfig holds content processing settings
 type ContentConfig struct {
 	MinTextLength       int         `mapstructure:"min_text_length" yaml:"min_text_length" json:"min_text_length"`
 	MaxTextLength       int         `mapstructure:"max_text_length" yaml:"max_text_length" json:"max_text_length"`
@@ -93,18 +93,18 @@ type ContentConfig struct {
 	Deduplication       DedupConfig `mapstructure:"deduplication" yaml:"deduplication" json:"deduplication"`
 }
 
-// DedupConfig holds deduplication settings
+// dedupConfig holds deduplication settings
 type DedupConfig struct {
 	Enabled               bool    `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	URLFingerprinting     bool    `mapstructure:"url_fingerprinting" yaml:"url_fingerprinting" json:"url_fingerprinting"`
+	UrlFingerprinting     bool    `mapstructure:"url_fingerprinting" yaml:"url_fingerprinting" json:"url_fingerprinting"`
 	ContentFingerprinting bool    `mapstructure:"content_fingerprinting" yaml:"content_fingerprinting" json:"content_fingerprinting"`
 	SemanticSimilarity    bool    `mapstructure:"semantic_similarity" yaml:"semantic_similarity" json:"semantic_similarity"`
 	SimilarityThreshold   float64 `mapstructure:"similarity_threshold" yaml:"similarity_threshold" json:"similarity_threshold"`
 }
 
-// StorageConfig holds storage backend settings
+// storageConfig holds storage backend settings
 type StorageConfig struct {
-	Type                  string        `mapstructure:"type" yaml:"type" json:"type"`
+	Type                  string        `mapstructure:"type" yaml:"type" json:"type"` // type is a keyword lol
 	Path                  string        `mapstructure:"path" yaml:"path" json:"path"`
 	BatchSize             int           `mapstructure:"batch_size" yaml:"batch_size" json:"batch_size"`
 	Compression           bool          `mapstructure:"compression" yaml:"compression" json:"compression"`
@@ -124,7 +124,7 @@ type StorageConfig struct {
 	S3UseSSL              bool          `mapstructure:"s3_use_ssl" yaml:"s3_use_ssl" json:"s3_use_ssl"`
 }
 
-// MonitoringConfig holds monitoring and observability settings
+// monitoringConfig holds monitoring and observability settings
 type MonitoringConfig struct {
 	LogLevel          string  `mapstructure:"log_level" yaml:"log_level" json:"log_level"`
 	LogFormat         string  `mapstructure:"log_format" yaml:"log_format" json:"log_format"`
@@ -145,7 +145,7 @@ type MonitoringConfig struct {
 	TracingSampleRate float64 `mapstructure:"tracing_sample_rate" yaml:"tracing_sample_rate" json:"tracing_sample_rate"`
 }
 
-// HTTPConfig holds HTTP client settings
+// httpConfig holds HTTP client settings
 type HTTPConfig struct {
 	MaxIdleConnections        int           `mapstructure:"max_idle_connections" yaml:"max_idle_connections" json:"max_idle_connections"`
 	MaxIdleConnectionsPerHost int           `mapstructure:"max_idle_connections_per_host" yaml:"max_idle_connections_per_host" json:"max_idle_connections_per_host"`
@@ -153,26 +153,26 @@ type HTTPConfig struct {
 	DisableKeepAlives         bool          `mapstructure:"disable_keep_alives" yaml:"disable_keep_alives" json:"disable_keep_alives"`
 	Timeout                   time.Duration `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
 	DialTimeout               time.Duration `mapstructure:"dial_timeout" yaml:"dial_timeout" json:"dial_timeout"`
-	TLSHandshakeTimeout       time.Duration `mapstructure:"tls_handshake_timeout" yaml:"tls_handshake_timeout" json:"tls_handshake_timeout"`
+	TlsHandshakeTimeout       time.Duration `mapstructure:"tls_handshake_timeout" yaml:"tls_handshake_timeout" json:"tls_handshake_timeout"`
 	ResponseHeaderTimeout     time.Duration `mapstructure:"response_header_timeout" yaml:"response_header_timeout" json:"response_header_timeout"`
 	DisableCompression        bool          `mapstructure:"disable_compression" yaml:"disable_compression" json:"disable_compression"`
 	AcceptEncoding            string        `mapstructure:"accept_encoding" yaml:"accept_encoding" json:"accept_encoding"`
 }
 
-// FrontierConfig holds URL frontier settings
+// frontierConfig holds URL frontier settings
 type FrontierConfig struct {
 	QueueCapacity      int           `mapstructure:"queue_capacity" yaml:"queue_capacity" json:"queue_capacity"`
 	PriorityQueues     int           `mapstructure:"priority_queues" yaml:"priority_queues" json:"priority_queues"`
 	PolitenessQueues   int           `mapstructure:"politeness_queues" yaml:"politeness_queues" json:"politeness_queues"`
 	CheckpointInterval time.Duration `mapstructure:"checkpoint_interval" yaml:"checkpoint_interval" json:"checkpoint_interval"`
 	PersistentState    bool          `mapstructure:"persistent_state" yaml:"persistent_state" json:"persistent_state"`
-	URLNormalization   bool          `mapstructure:"url_normalization" yaml:"url_normalization" json:"url_normalization"`
+	UrlNormalization   bool          `mapstructure:"url_normalization" yaml:"url_normalization" json:"url_normalization"`
 	Canonicalization   bool          `mapstructure:"canonicalization" yaml:"canonicalization" json:"canonicalization"`
 	RemoveFragments    bool          `mapstructure:"remove_fragments" yaml:"remove_fragments" json:"remove_fragments"`
 	SortQueryParams    bool          `mapstructure:"sort_query_params" yaml:"sort_query_params" json:"sort_query_params"`
 }
 
-// RobotsConfig holds robots.txt settings
+// robotsConfig holds robots.txt settings
 type RobotsConfig struct {
 	Enabled            bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	CacheDuration      time.Duration `mapstructure:"cache_duration" yaml:"cache_duration" json:"cache_duration"`
@@ -181,21 +181,21 @@ type RobotsConfig struct {
 	RespectCrawlDelay  bool          `mapstructure:"respect_crawl_delay" yaml:"respect_crawl_delay" json:"respect_crawl_delay"`
 }
 
-// RedisConfig holds Redis settings
+// redisConfig holds Redis settings
 type RedisConfig struct {
 	Addr               string        `mapstructure:"addr" yaml:"addr" json:"addr"`
 	Password           string        `mapstructure:"password" yaml:"password" json:"password"`
-	DB                 int           `mapstructure:"db" yaml:"db" json:"db"`
+	Db                 int           `mapstructure:"db" yaml:"db" json:"db"`
 	PoolSize           int           `mapstructure:"pool_size" yaml:"pool_size" json:"pool_size"`
 	MinIdleConnections int           `mapstructure:"min_idle_connections" yaml:"min_idle_connections" json:"min_idle_connections"`
 	MaxRetries         int           `mapstructure:"max_retries" yaml:"max_retries" json:"max_retries"`
 	RetryDelay         time.Duration `mapstructure:"retry_delay" yaml:"retry_delay" json:"retry_delay"`
 }
 
-// SecurityConfig holds security settings
+// securityConfig holds security settings
 type SecurityConfig struct {
-	TLSInsecureSkipVerify bool     `mapstructure:"tls_insecure_skip_verify" yaml:"tls_insecure_skip_verify" json:"tls_insecure_skip_verify"`
-	TLSMinVersion         string   `mapstructure:"tls_min_version" yaml:"tls_min_version" json:"tls_min_version"`
+	TlsInsecureSkipVerify bool     `mapstructure:"tls_insecure_skip_verify" yaml:"tls_insecure_skip_verify" json:"tls_insecure_skip_verify"`
+	TlsMinVersion         string   `mapstructure:"tls_min_version" yaml:"tls_min_version" json:"tls_min_version"`
 	AuthEnabled           bool     `mapstructure:"auth_enabled" yaml:"auth_enabled" json:"auth_enabled"`
 	AuthType              string   `mapstructure:"auth_type" yaml:"auth_type" json:"auth_type"`
 	AuthUsername          string   `mapstructure:"auth_username" yaml:"auth_username" json:"auth_username"`
@@ -205,7 +205,7 @@ type SecurityConfig struct {
 	BlockedIPs            []string `mapstructure:"blocked_ips" yaml:"blocked_ips" json:"blocked_ips"`
 }
 
-// FeatureConfig holds feature flags
+// featureConfig holds feature flags
 type FeatureConfig struct {
 	JavaScriptRendering     bool `mapstructure:"javascript_rendering" yaml:"javascript_rendering" json:"javascript_rendering"`
 	SemanticAnalysis        bool `mapstructure:"semantic_analysis" yaml:"semantic_analysis" json:"semantic_analysis"`
@@ -214,7 +214,7 @@ type FeatureConfig struct {
 	RealTimeStreaming       bool `mapstructure:"real_time_streaming" yaml:"real_time_streaming" json:"real_time_streaming"`
 }
 
-// LoadConfig loads configuration from multiple sources in order of precedence:
+// loadConfig loads configuration from multiple sources in order of precedence:
 // 1. Command line flags
 // 2. Environment variables
 // 3. Configuration file
@@ -222,7 +222,7 @@ type FeatureConfig struct {
 func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 	v := viper.New()
 
-	setDefaults(v)
+	SetDefaults(v)
 
 	// Set up configuration file paths
 	if configPath != "" {
@@ -251,7 +251,7 @@ func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 	v.AutomaticEnv()
 
 	// Bind specific environment variables for better support
-	bindEnvVariables(v)
+	BindEnvVariables(v)
 
 	// Read configuration file if it exists
 	configFileUsed := ""
@@ -281,7 +281,7 @@ func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 	config.configFileUsed = configFileUsed
 
 	// Validate configuration
-	if err := validateConfig(&config); err != nil {
+	if err := ValidateConfig(&config); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
@@ -289,7 +289,7 @@ func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 }
 
 // bindEnvVariables explicitly binds environment variables for better support
-func bindEnvVariables(v *viper.Viper) {
+func BindEnvVariables(v *viper.Viper) {
 	// Common environment variable mappings
 	envMappings := map[string]string{
 		"crawler.user_agent":             "CRAWLER_USER_AGENT",
@@ -316,7 +316,7 @@ func bindEnvVariables(v *viper.Viper) {
 }
 
 // setDefaults sets all default configuration values
-func setDefaults(v *viper.Viper) {
+func SetDefaults(v *viper.Viper) {
 	// Crawler defaults
 	v.SetDefault("crawler.max_pages", 10000)
 	v.SetDefault("crawler.max_depth", 5)
@@ -432,7 +432,7 @@ func setDefaults(v *viper.Viper) {
 }
 
 // validateConfig performs comprehensive validation of the configuration
-func validateConfig(config *Config) error {
+func ValidateConfig(config *Config) error {
 	// Validate crawler settings
 	if config.Crawler.MaxPages <= 0 {
 		return fmt.Errorf("crawler.max_pages must be positive, got %d", config.Crawler.MaxPages)
@@ -571,8 +571,8 @@ func validateConfig(config *Config) error {
 
 	// Validate security settings
 	validTLSVersions := map[string]bool{"1.0": true, "1.1": true, "1.2": true, "1.3": true}
-	if !validTLSVersions[config.Security.TLSMinVersion] {
-		return fmt.Errorf("invalid security.tls_min_version: %s. Valid options: 1.0, 1.1, 1.2, 1.3", config.Security.TLSMinVersion)
+	if !validTLSVersions[config.Security.TlsMinVersion] {
+		return fmt.Errorf("invalid security.tls_min_version: %s. Valid options: 1.0, 1.1, 1.2, 1.3", config.Security.TlsMinVersion)
 	}
 
 	if config.Security.AuthEnabled {
@@ -596,7 +596,7 @@ func validateConfig(config *Config) error {
 	}
 	for _, lang := range config.Content.Languages {
 		if !validLanguageCodes[lang] {
-			return fmt.Errorf("unsupported language code: %s. Supported codes: %v", lang, getKeys(validLanguageCodes))
+			return fmt.Errorf("unsupported language code: %s. Supported codes: %v", lang, GetKeys(validLanguageCodes))
 		}
 	}
 
@@ -614,7 +614,7 @@ func validateConfig(config *Config) error {
 	}
 
 	// Create required directories
-	if err := createDirectories(config); err != nil {
+	if err := CreateDirectories(config); err != nil {
 		return fmt.Errorf("failed to create required directories: %w", err)
 	}
 
@@ -622,7 +622,7 @@ func validateConfig(config *Config) error {
 }
 
 // getKeys returns the keys of a map[string]bool as a slice
-func getKeys(m map[string]bool) []string {
+func GetKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -631,7 +631,7 @@ func getKeys(m map[string]bool) []string {
 }
 
 // createDirectories creates required directories based on configuration
-func createDirectories(config *Config) error {
+func CreateDirectories(config *Config) error {
 	var dirsToCreate []string
 
 	// Add storage path if using file storage
@@ -698,18 +698,18 @@ func (c *Config) GetLogger() (*zap.Logger, error) {
 func (c *Config) String() string {
 	// Create a copy and redact sensitive information
 	configCopy := *c
-	configCopy.Storage.ConnectionString = redactConnectionString(configCopy.Storage.ConnectionString)
-	configCopy.Storage.S3AccessKey = redact(configCopy.Storage.S3AccessKey)
-	configCopy.Storage.S3SecretKey = redact(configCopy.Storage.S3SecretKey)
-	configCopy.Redis.Password = redact(configCopy.Redis.Password)
-	configCopy.Security.AuthPassword = redact(configCopy.Security.AuthPassword)
-	configCopy.Security.AuthToken = redact(configCopy.Security.AuthToken)
+	configCopy.Storage.ConnectionString = RedactConnectionString(configCopy.Storage.ConnectionString)
+	configCopy.Storage.S3AccessKey = Redact(configCopy.Storage.S3AccessKey)
+	configCopy.Storage.S3SecretKey = Redact(configCopy.Storage.S3SecretKey)
+	configCopy.Redis.Password = Redact(configCopy.Redis.Password)
+	configCopy.Security.AuthPassword = Redact(configCopy.Security.AuthPassword)
+	configCopy.Security.AuthToken = Redact(configCopy.Security.AuthToken)
 
 	return fmt.Sprintf("%+v", configCopy)
 }
 
 // redact replaces sensitive values with asterisks
-func redact(value string) string {
+func Redact(value string) string {
 	if value == "" {
 		return ""
 	}
@@ -720,7 +720,7 @@ func redact(value string) string {
 }
 
 // redactConnectionString redacts password from database connection string
-func redactConnectionString(connStr string) string {
+func RedactConnectionString(connStr string) string {
 	if connStr == "" {
 		return ""
 	}

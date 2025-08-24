@@ -395,7 +395,7 @@ func TestValidateConfig(t *testing.T) {
 			name: "invalid tls version",
 			configFunc: func() *Config {
 				config, _ := LoadConfig("", nil)
-				config.Security.TLSMinVersion = "2.0"
+				config.Security.TlsMinVersion = "2.0"
 				return config
 			},
 			expectError: true,
@@ -449,7 +449,7 @@ func TestValidateConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := tt.configFunc()
-			err := validateConfig(config)
+			err := ValidateConfig(config)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -479,7 +479,7 @@ func TestCreateDirectories(t *testing.T) {
 		},
 	}
 
-	err = createDirectories(config)
+	err = CreateDirectories(config)
 	assert.NoError(t, err)
 
 	// Verify directories were created
@@ -582,7 +582,7 @@ func TestRedactFunctions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := redact(tt.input)
+			result := Redact(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -617,7 +617,7 @@ func TestRedactFunctions(t *testing.T) {
 
 	for _, tt := range connTests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := redactConnectionString(tt.input)
+			result := RedactConnectionString(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -631,14 +631,14 @@ func TestGetKeys(t *testing.T) {
 		"cherry": true,
 	}
 
-	keys := getKeys(m)
+	keys := GetKeys(m)
 	assert.Len(t, keys, 3)
 	assert.Contains(t, keys, "apple")
 	assert.Contains(t, keys, "banana")
 	assert.Contains(t, keys, "cherry")
 
 	// Test empty map
-	emptyKeys := getKeys(map[string]bool{})
+	emptyKeys := GetKeys(map[string]bool{})
 	assert.Len(t, emptyKeys, 0)
 }
 
@@ -661,7 +661,7 @@ func BenchmarkValidateConfig(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := validateConfig(config)
+		err := ValidateConfig(config)
 		if err != nil {
 			b.Fatal(err)
 		}

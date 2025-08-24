@@ -22,7 +22,7 @@ type testPayload struct {
 	ID      int    `json:"id"`
 }
 
-func createTestConfig() *config.HTTPConfig {
+func CreateTestConfig() *config.HTTPConfig {
 	return &config.HTTPConfig{
 		MaxIdleConnections:        100,
 		MaxIdleConnectionsPerHost: 10,
@@ -30,39 +30,39 @@ func createTestConfig() *config.HTTPConfig {
 		DisableKeepAlives:         false,
 		Timeout:                   5 * time.Second,
 		DialTimeout:               2 * time.Second,
-		TLSHandshakeTimeout:       3 * time.Second,
+		TlsHandshakeTimeout:       3 * time.Second,
 		ResponseHeaderTimeout:     3 * time.Second,
 		DisableCompression:        false,
 	}
 }
 
-func createTestLogger() *zap.Logger {
+func CreateTestLogger() *zap.Logger {
 	return zaptest.NewLogger(&testing.T{})
 }
 
 func TestNewHTTPClient(t *testing.T) {
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 
 	client := NewHTTPClient(cfg, logger)
 
 	assert.NotNil(t, client)
-	assert.NotNil(t, client.client)
-	assert.NotNil(t, client.logger)
-	assert.Equal(t, cfg, client.config)
-	assert.Equal(t, 3, client.retryConfig.MaxRetries)
-	assert.Len(t, client.middleware, 2) // LoggingMiddleware and UserAgentMiddleware
+	assert.NotNil(t, client.Client)
+	assert.NotNil(t, client.Logger)
+	assert.Equal(t, cfg, client.Config)
+	assert.Equal(t, 3, client.RetryConfig.MaxRetries)
+	assert.Len(t, client.Middleware, 2) // LoggingMiddleware and UserAgentMiddleware
 }
 
 func TestNewHTTPClientWithMiddleware(t *testing.T) {
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	timeoutMiddleware := NewTimeoutMiddleware(1 * time.Second)
 
 	client := NewHTTPClientWithMiddleware(cfg, logger, timeoutMiddleware)
 
 	assert.NotNil(t, client)
-	assert.Len(t, client.middleware, 3) // Original 2 + 1 custom
+	assert.Len(t, client.Middleware, 3) // Original 2 + 1 custom
 }
 
 func TestHTTPClient_Get(t *testing.T) {
@@ -99,8 +99,8 @@ func TestHTTPClient_Get(t *testing.T) {
 			}))
 			defer server.Close()
 
-			cfg := createTestConfig()
-			logger := createTestLogger()
+			cfg := CreateTestConfig()
+			logger := CreateTestLogger()
 			client := NewHTTPClient(cfg, logger)
 
 			ctx := context.Background()
@@ -133,8 +133,8 @@ func TestHTTPClient_Head(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
 	ctx := context.Background()
@@ -207,8 +207,8 @@ func TestHTTPClient_Post(t *testing.T) {
 			}))
 			defer server.Close()
 
-			cfg := createTestConfig()
-			logger := createTestLogger()
+			cfg := CreateTestConfig()
+			logger := CreateTestLogger()
 			client := NewHTTPClient(cfg, logger)
 
 			ctx := context.Background()
@@ -222,8 +222,8 @@ func TestHTTPClient_Post(t *testing.T) {
 }
 
 func TestHTTPClient_Post_InvalidJSON(t *testing.T) {
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
 	invalidBody := make(chan int)
@@ -251,8 +251,8 @@ func TestHTTPClient_RetryLogic_RetryableStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
 	ctx := context.Background()
@@ -276,8 +276,8 @@ func TestHTTPClient_RetryLogic_Exhaustion(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
 	ctx := context.Background()
@@ -367,7 +367,7 @@ func TestLinearBackoff_NextDelay(t *testing.T) {
 }
 
 func TestLoggingMiddleware_RoundTrip(t *testing.T) {
-	logger := createTestLogger()
+	logger := CreateTestLogger()
 	middleware := NewLoggingMiddleware(logger)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -506,7 +506,7 @@ func TestIsRetryableError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isRetryableError(tt.err, []error{})
+			result := IsRetryableError(tt.err, []error{})
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -531,19 +531,19 @@ func TestIsRetryableStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("status_%d", tt.statusCode), func(t *testing.T) {
-			result := isRetryableStatus(tt.statusCode, retryableStatus)
+			result := IsRetryableStatus(tt.statusCode, retryableStatus)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func TestChainMiddleware(t *testing.T) {
-	logger := createTestLogger()
+	logger := CreateTestLogger()
 	middleware1 := NewLoggingMiddleware(logger)
 	middleware2 := NewUserAgentMiddleware("TestUA/1.0")
 
 	baseTransport := http.DefaultTransport
-	chained := chainMiddleware([]Middleware{middleware1, middleware2}, baseTransport)
+	chained := ChainMiddleware([]Middleware{middleware1, middleware2}, baseTransport)
 
 	assert.NotNil(t, chained)
 
@@ -564,27 +564,27 @@ func TestChainMiddleware(t *testing.T) {
 
 func TestChainMiddleware_EmptyMiddleware(t *testing.T) {
 	baseTransport := http.DefaultTransport
-	chained := chainMiddleware([]Middleware{}, baseTransport)
+	chained := ChainMiddleware([]Middleware{}, baseTransport)
 
 	assert.Equal(t, baseTransport, chained)
 }
 
 func TestHTTPClient_AddMiddleware(t *testing.T) {
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
-	initialCount := len(client.middleware)
+	initialCount := len(client.Middleware)
 
 	timeoutMiddleware := NewTimeoutMiddleware(1 * time.Second)
 	client.AddMiddleware(timeoutMiddleware)
 
-	assert.Equal(t, initialCount+1, len(client.middleware))
+	assert.Equal(t, initialCount+1, len(client.Middleware))
 }
 
 func TestHTTPClient_SetRetryConfig(t *testing.T) {
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
 	newConfig := RetryConfig{
@@ -598,13 +598,13 @@ func TestHTTPClient_SetRetryConfig(t *testing.T) {
 
 	client.SetRetryConfig(newConfig)
 
-	assert.Equal(t, 5, client.retryConfig.MaxRetries)
-	assert.Equal(t, []int{429, 500}, client.retryConfig.RetryableStatus)
+	assert.Equal(t, 5, client.RetryConfig.MaxRetries)
+	assert.Equal(t, []int{429, 500}, client.RetryConfig.RetryableStatus)
 }
 
 func TestHTTPClient_Close(t *testing.T) {
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
 	err := client.Close()
@@ -618,8 +618,8 @@ func TestHTTPClient_ContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := createTestConfig()
-	logger := createTestLogger()
+	cfg := CreateTestConfig()
+	logger := CreateTestLogger()
 	client := NewHTTPClient(cfg, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -637,7 +637,7 @@ func BenchmarkHTTPClient_Get(b *testing.B) {
 	}))
 	defer server.Close()
 
-	cfg := createTestConfig()
+	cfg := CreateTestConfig()
 	logger := zap.NewNop()
 	client := NewHTTPClient(cfg, logger)
 	ctx := context.Background()

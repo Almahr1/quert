@@ -18,11 +18,11 @@ import (
 )
 
 type HTTPClient struct {
-	client      *http.Client
-	config      *config.HTTPConfig
-	logger      *zap.Logger
-	middleware  []Middleware
-	retryConfig RetryConfig
+	Client      *http.Client
+	Config      *config.HTTPConfig
+	Logger      *zap.Logger
+	Middleware  []Middleware
+	RetryConfig RetryConfig
 }
 
 type RetryConfig struct {
@@ -53,15 +53,15 @@ type Middleware interface {
 }
 
 type LoggingMiddleware struct {
-	logger *zap.Logger
+	Logger *zap.Logger
 }
 
 type UserAgentMiddleware struct {
-	userAgent string
+	UserAgent string
 }
 
 type TimeoutMiddleware struct {
-	timeout time.Duration
+	Timeout time.Duration
 }
 
 type RateLimitMiddleware struct {
@@ -82,7 +82,7 @@ type Response struct {
 }
 
 func NewHTTPClient(cfg *config.HTTPConfig, logger *zap.Logger) *HTTPClient {
-	client := buildHTTPClient(cfg)
+	client := BuildHTTPClient(cfg)
 	retryConfig := RetryConfig{
 		MaxRetries: 3,
 		BackoffStrategy: &ExponentialBackoff{
@@ -100,17 +100,17 @@ func NewHTTPClient(cfg *config.HTTPConfig, logger *zap.Logger) *HTTPClient {
 	}
 
 	return &HTTPClient{
-		client:      client,
-		config:      cfg,
-		logger:      logger,
-		middleware:  middleware,
-		retryConfig: retryConfig,
+		Client:      client,
+		Config:      cfg,
+		Logger:      logger,
+		Middleware:  middleware,
+		RetryConfig: retryConfig,
 	}
 }
 
 func NewHTTPClientWithMiddleware(cfg *config.HTTPConfig, logger *zap.Logger, middleware ...Middleware) *HTTPClient {
 	client := NewHTTPClient(cfg, logger)
-	client.middleware = append(client.middleware, middleware...)
+	client.Middleware = append(client.Middleware, middleware...)
 	return client
 }
 
@@ -171,14 +171,14 @@ func (c *HTTPClient) Do(ctx context.Context, req *http.Request) (*Response, erro
 	var lastErr error
 	var resp *http.Response
 
-	transport := chainMiddleware(c.middleware, c.client.Transport)
+	transport := ChainMiddleware(c.Middleware, c.Client.Transport)
 
-	for attempt := 0; attempt <= c.retryConfig.MaxRetries; attempt++ {
+	for attempt := 0; attempt <= c.RetryConfig.MaxRetries; attempt++ {
 		reqClone := req.Clone(ctx)
 
 		if attempt > 0 {
-			delay := c.retryConfig.BackoffStrategy.NextDelay(attempt)
-			c.logger.Debug("retrying request",
+			delay := c.RetryConfig.BackoffStrategy.NextDelay(attempt)
+			c.Logger.Debug("retrying request",
 				zap.String("url", req.URL.String()),
 				zap.Int("attempt", attempt),
 				zap.Duration("delay", delay),
@@ -194,7 +194,7 @@ func (c *HTTPClient) Do(ctx context.Context, req *http.Request) (*Response, erro
 		resp, lastErr = transport.RoundTrip(reqClone)
 
 		if lastErr == nil {
-			if !isRetryableStatus(resp.StatusCode, c.retryConfig.RetryableStatus) {
+			if !IsRetryableStatus(resp.StatusCode, c.RetryConfig.RetryableStatus) {
 				break
 			}
 			resp.Body.Close()
@@ -202,11 +202,11 @@ func (c *HTTPClient) Do(ctx context.Context, req *http.Request) (*Response, erro
 			continue
 		}
 
-		if !isRetryableError(lastErr, c.retryConfig.RetryableErrors) {
+		if !IsRetryableError(lastErr, c.RetryConfig.RetryableErrors) {
 			break
 		}
 
-		c.logger.Warn("request failed, will retry",
+		c.Logger.Warn("request failed, will retry",
 			zap.String("url", req.URL.String()),
 			zap.Int("attempt", attempt),
 			zap.Error(lastErr),
@@ -214,7 +214,7 @@ func (c *HTTPClient) Do(ctx context.Context, req *http.Request) (*Response, erro
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("request failed after %d attempts: %w", c.retryConfig.MaxRetries+1, lastErr)
+		return nil, fmt.Errorf("request failed after %d attempts: %w", c.RetryConfig.MaxRetries+1, lastErr)
 	}
 
 	duration := time.Since(start)
@@ -231,16 +231,16 @@ func (c *HTTPClient) Do(ctx context.Context, req *http.Request) (*Response, erro
 }
 
 func (c *HTTPClient) AddMiddleware(middleware ...Middleware) {
-	c.middleware = append(c.middleware, middleware...)
+	c.Middleware = append(c.Middleware, middleware...)
 }
 
 func (c *HTTPClient) SetRetryConfig(config RetryConfig) {
-	c.retryConfig = config
+	c.RetryConfig = config
 }
 
 func (c *HTTPClient) Close() error {
-	c.client.CloseIdleConnections()
-	c.logger.Info("HTTP client closed")
+	c.Client.CloseIdleConnections()
+	c.Logger.Info("HTTP client closed")
 	return nil
 }
 
@@ -281,7 +281,7 @@ func (l *LinearBackoff) NextDelay(attempt int) time.Duration {
 func (m *LoggingMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
 	start := time.Now()
 
-	m.logger.Debug("HTTP request",
+	m.Logger.Debug("HTTP request",
 		zap.String("method", req.Method),
 		zap.String("url", req.URL.String()),
 		zap.String("user_agent", req.Header.Get("User-Agent")),
@@ -291,14 +291,14 @@ func (m *LoggingMiddleware) RoundTrip(req *http.Request, next http.RoundTripper)
 	duration := time.Since(start)
 
 	if err != nil {
-		m.logger.Error("HTTP request failed",
+		m.Logger.Error("HTTP request failed",
 			zap.String("method", req.Method),
 			zap.String("url", req.URL.String()),
 			zap.Duration("duration", duration),
 			zap.Error(err),
 		)
 	} else {
-		m.logger.Debug("HTTP response",
+		m.Logger.Debug("HTTP response",
 			zap.String("method", req.Method),
 			zap.String("url", req.URL.String()),
 			zap.Int("status", resp.StatusCode),
@@ -312,13 +312,13 @@ func (m *LoggingMiddleware) RoundTrip(req *http.Request, next http.RoundTripper)
 
 func (m *UserAgentMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
 	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", m.userAgent)
+		req.Header.Set("User-Agent", m.UserAgent)
 	}
 	return next.RoundTrip(req)
 }
 
 func (m *TimeoutMiddleware) RoundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(req.Context(), m.timeout)
+	ctx, cancel := context.WithTimeout(req.Context(), m.Timeout)
 	defer cancel()
 
 	reqWithTimeout := req.WithContext(ctx)
@@ -344,7 +344,7 @@ func (m *MetricsMiddleware) RoundTrip(req *http.Request, next http.RoundTripper)
 	// - Request duration histogram using duration variable
 	// - Response size histogram
 	// - Error rate by type
-	
+
 	_ = duration // Suppress unused variable warning until metrics are implemented
 
 	return resp, err
@@ -352,19 +352,19 @@ func (m *MetricsMiddleware) RoundTrip(req *http.Request, next http.RoundTripper)
 
 func NewLoggingMiddleware(logger *zap.Logger) *LoggingMiddleware {
 	return &LoggingMiddleware{
-		logger: logger,
+		Logger: logger,
 	}
 }
 
 func NewUserAgentMiddleware(userAgent string) *UserAgentMiddleware {
 	return &UserAgentMiddleware{
-		userAgent: userAgent,
+		UserAgent: userAgent,
 	}
 }
 
 func NewTimeoutMiddleware(timeout time.Duration) *TimeoutMiddleware {
 	return &TimeoutMiddleware{
-		timeout: timeout,
+		Timeout: timeout,
 	}
 }
 
@@ -380,7 +380,7 @@ func NewMetricsMiddleware() *MetricsMiddleware {
 	}
 }
 
-func isRetryableError(err error, retryableErrors []error) bool {
+func IsRetryableError(err error, retryableErrors []error) bool {
 	if err == nil {
 		return false
 	}
@@ -437,7 +437,7 @@ var defaultRetryableStatusCodes = map[int]struct{}{
 	504: {}, // Gateway Timeout
 }
 
-func isRetryableStatus(statusCode int, retryableStatus []int) bool {
+func IsRetryableStatus(statusCode int, retryableStatus []int) bool {
 	// Use pre-built map if using default retryable status codes
 	if len(retryableStatus) == 5 {
 		isDefault := true
@@ -452,7 +452,7 @@ func isRetryableStatus(statusCode int, retryableStatus []int) bool {
 			return exists
 		}
 	}
-	
+
 	// Fallback to creating map for custom retryable status codes
 	set := make(map[int]struct{}, len(retryableStatus))
 	for _, code := range retryableStatus {
@@ -463,7 +463,7 @@ func isRetryableStatus(statusCode int, retryableStatus []int) bool {
 	return exists
 }
 
-func buildHTTPClient(cfg *config.HTTPConfig) *http.Client {
+func BuildHTTPClient(cfg *config.HTTPConfig) *http.Client {
 	dialer := &net.Dialer{
 		Timeout: cfg.DialTimeout,
 	}
@@ -474,7 +474,7 @@ func buildHTTPClient(cfg *config.HTTPConfig) *http.Client {
 		IdleConnTimeout:       cfg.IdleConnectionTimeout,
 		DisableKeepAlives:     cfg.DisableKeepAlives,
 		DisableCompression:    cfg.DisableCompression,
-		TLSHandshakeTimeout:   cfg.TLSHandshakeTimeout,
+		TLSHandshakeTimeout:   cfg.TlsHandshakeTimeout,
 		ResponseHeaderTimeout: cfg.ResponseHeaderTimeout,
 		DialContext:           dialer.DialContext,
 	}
@@ -487,7 +487,7 @@ func buildHTTPClient(cfg *config.HTTPConfig) *http.Client {
 	return client
 }
 
-func chainMiddleware(middleware []Middleware, base http.RoundTripper) http.RoundTripper {
+func ChainMiddleware(middleware []Middleware, base http.RoundTripper) http.RoundTripper {
 	if len(middleware) == 0 {
 		return base
 	}
@@ -495,15 +495,15 @@ func chainMiddleware(middleware []Middleware, base http.RoundTripper) http.Round
 	// Create a middleware chain by wrapping each middleware around the next
 	// We build from the inside out (base -> middleware[n-1] -> ... -> middleware[0])
 	result := &middlewareChain{
-		middleware: middleware[len(middleware)-1],
-		next:       base,
+		Middleware: middleware[len(middleware)-1],
+		Next:       base,
 	}
 
 	// Wrap each middleware around the previous result
 	for i := len(middleware) - 2; i >= 0; i-- {
 		result = &middlewareChain{
-			middleware: middleware[i],
-			next:       result,
+			Middleware: middleware[i],
+			Next:       result,
 		}
 	}
 
@@ -511,10 +511,10 @@ func chainMiddleware(middleware []Middleware, base http.RoundTripper) http.Round
 }
 
 type middlewareChain struct {
-	middleware Middleware
-	next       http.RoundTripper
+	Middleware Middleware
+	Next       http.RoundTripper
 }
 
 func (m *middlewareChain) RoundTrip(req *http.Request) (*http.Response, error) {
-	return m.middleware.RoundTrip(req, m.next)
+	return m.Middleware.RoundTrip(req, m.Next)
 }

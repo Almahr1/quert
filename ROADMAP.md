@@ -418,18 +418,18 @@ func (m *MockStorage) Store(content Content) error {
 #### Worker Pool Implementation
 - [x] Create `internal/crawler/worker.go`
 - [x] Implement worker pool struct with channels
-- [ ] Add job distribution logic
-- [ ] Create result collection mechanism
-- [ ] Implement graceful shutdown with context
-- [ ] Write concurrent worker tests
+- [x] Add job distribution logic
+- [x] Create result collection mechanism
+- [x] Implement graceful shutdown with context
+- [x] Write concurrent worker tests
 
 #### Rate Limiter Integration
-- [ ] Install rate limiter: `go get golang.org/x/time/rate`
-- [ ] Create `internal/ratelimit/limiter.go`
-- [ ] Implement per-host rate limiting
-- [ ] Add global rate limiting option
-- [ ] Create adaptive rate adjustment logic
-- [ ] Test rate limiting with mock time
+- [x] Install rate limiter: `go get golang.org/x/time/rate`
+- [x] Create `internal/ratelimit/limiter.go`
+- [x] Implement per-host rate limiting
+- [x] Add global rate limiting option
+- [x] Create adaptive rate adjustment logic
+- [x] Test rate limiting with mock time
 
 #### Basic Content Extraction
 - [ ] Install goquery: `go get github.com/PuerkitoBio/goquery`
