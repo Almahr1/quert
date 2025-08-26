@@ -432,11 +432,11 @@ func (m *MockStorage) Store(content Content) error {
 - [x] Test rate limiting with mock time
 
 #### Basic Content Extraction
-- [ ] Install goquery: `go get github.com/PuerkitoBio/goquery`
-- [ ] Create `internal/extractor/html.go`
-- [ ] Implement basic HTML parsing and link extraction
-- [ ] Add simple text extraction and cleaning
-- [ ] Create basic storage interface and file writer
+- [x] Install goquery: `go get github.com/PuerkitoBio/goquery`
+- [x] Create `internal/extractor/html.go`
+- [x] Implement basic HTML parsing and link extraction
+- [x] Add simple text extraction and cleaning
+- [x] Create basic storage interface and file writer
 
 ### 📊 **Content Processing Phase (Days 8-12)**
 

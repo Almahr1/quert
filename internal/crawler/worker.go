@@ -6,15 +6,14 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"regexp"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Almahr1/quert/internal/client"
 	"github.com/Almahr1/quert/internal/config"
+	"github.com/Almahr1/quert/internal/extractor"
 	"github.com/Almahr1/quert/internal/frontier"
 	"github.com/Almahr1/quert/internal/robots"
 	"go.uber.org/zap"
@@ -35,20 +34,21 @@ type CrawlJob struct {
 
 // CrawlResult represents the result of a crawling operation
 type CrawlResult struct {
-	Job           *CrawlJob
-	URL           string
-	StatusCode    int
-	Headers       http.Header
-	Body          []byte
-	ContentType   string
-	ContentLength int64
-	ResponseTime  time.Duration
-	Error         error
-	Links         []string
-	ExtractedText string
-	CompletedAt   time.Time
-	Success       bool
-	Retryable     bool
+	Job              *CrawlJob
+	URL              string
+	StatusCode       int
+	Headers          http.Header
+	Body             []byte
+	ContentType      string
+	ContentLength    int64
+	ResponseTime     time.Duration
+	Error            error
+	Links            []string
+	ExtractedText    string
+	ExtractedContent *extractor.ExtractedContent
+	CompletedAt      time.Time
+	Success          bool
+	Retryable        bool
 }
 
 // WorkerStats holds statistics for a worker
@@ -79,8 +79,9 @@ type CrawlerEngine struct {
 	StatsMutex  sync.RWMutex
 
 	// HTTP and external dependencies
-	HTTPClient   *client.HTTPClient
-	RobotsParser *robots.Parser
+	HTTPClient        *client.HTTPClient
+	RobotsParser      *robots.Parser
+	ExtractorFactory  *extractor.ExtractorFactory
 
 	// Rate limiting
 	GlobalLimiter *rate.Limiter
@@ -123,10 +124,7 @@ type WorkerConfig struct {
 	BackoffStrategy string
 }
 
-// NewCrawlerEngine creates a new crawler engine instance
-// robotsCfg is optional - pass nil to use sensible defaults derived from crawler config
 func NewCrawlerEngine(cfg *config.CrawlerConfig, httpCfg *config.HTTPConfig, robotsCfg *config.RobotsConfig, logger *zap.Logger) *CrawlerEngine {
-	// 1. Validate input parameters (cfg, httpCfg, logger not nil) * should probably handle this better in the future *
 	if cfg == nil {
 		panic("crawler config cannot be nil")
 	}
@@ -239,18 +237,33 @@ func NewCrawlerEngine(cfg *config.CrawlerConfig, httpCfg *config.HTTPConfig, rob
 
 	robotsParser := robots.NewParser(robotsConfig, httpClient)
 
-	// 7. Set up rate limiters (global and per-host maps)
-	// Global rate limiter - conservative default of 1 request per second
-	globalLimiter := rate.NewLimiter(rate.Limit(1.0), 2) // 1 req/sec, burst of 2
+	// 7. Create content extractor factory with default configuration
+	extractorConfig := extractor.GetDefaultExtractorConfig()
+	extractorFactory := extractor.NewExtractorFactory(extractorConfig, logger)
+
+	// 8. Set up rate limiters (global and per-host maps)
+	// Use configurable rate limits with sensible defaults
+	GlobalRateLimit := crawlerConfig.GlobalRateLimit
+	if GlobalRateLimit <= 0 {
+		GlobalRateLimit = 5.0 // Default 5 req/sec if not configured
+	}
+	GlobalBurst := crawlerConfig.GlobalBurst
+	if GlobalBurst <= 0 {
+		GlobalBurst = 10 // Default burst of 10 if not configured
+	}
+
+	GlobalLimiter := rate.NewLimiter(rate.Limit(GlobalRateLimit), GlobalBurst)
 
 	// Per-host rate limiters map (will be populated dynamically)
-	hostLimiters := make(map[string]*rate.Limiter)
+	HostLimiters := make(map[string]*rate.Limiter)
 
 	logger.Info("initialized rate limiters",
-		zap.Float64("global_rate_limit", float64(globalLimiter.Limit())),
-		zap.Int("global_burst", globalLimiter.Burst()))
+		zap.Float64("global_rate_limit", float64(GlobalLimiter.Limit())),
+		zap.Int("global_burst", GlobalLimiter.Burst()),
+		zap.Float64("per_host_rate_limit", crawlerConfig.PerHostRateLimit),
+		zap.Int("per_host_burst", crawlerConfig.PerHostBurst))
 
-	// 8. Initialize worker statistics tracking
+	// 9. Initialize worker statistics tracking
 	workerStats := make(map[int]*WorkerStats)
 	for i := 0; i < crawlerConfig.ConcurrentWorkers; i++ {
 		workerStats[i] = &WorkerStats{
@@ -266,11 +279,11 @@ func NewCrawlerEngine(cfg *config.CrawlerConfig, httpCfg *config.HTTPConfig, rob
 		}
 	}
 
-	// 9. Set up context for graceful shutdown
+	// 10. Set up context for graceful shutdown
 	// Note: Context will be provided when Start() is called
 	// Here we just initialize the engine structure
 
-	// 10. Return configured CrawlerEngine instance
+	// 11. Return configured CrawlerEngine instance
 	engine := &CrawlerEngine{
 		// Configuration
 		Config:     &crawlerConfig,
@@ -285,12 +298,13 @@ func NewCrawlerEngine(cfg *config.CrawlerConfig, httpCfg *config.HTTPConfig, rob
 		StatsMutex:  sync.RWMutex{},
 
 		// HTTP and external dependencies
-		HTTPClient:   httpClient,
-		RobotsParser: robotsParser,
+		HTTPClient:       httpClient,
+		RobotsParser:     robotsParser,
+		ExtractorFactory: extractorFactory,
 
 		// Rate limiting
-		GlobalLimiter: globalLimiter,
-		HostLimiters:  hostLimiters,
+		GlobalLimiter: GlobalLimiter,
+		HostLimiters:  HostLimiters,
 		LimiterMutex:  sync.RWMutex{},
 
 		// Lifecycle management
@@ -813,27 +827,53 @@ func (CrawlerEngine *CrawlerEngine) ProcessJob(Context context.Context, Job *Cra
 		return Result
 	}
 
-	// 7. Extract links from HTML content (if applicable)
-	if strings.Contains(strings.ToLower(Result.ContentType), "text/html") {
-		ExtractedLinks := CrawlerEngine.ExtractLinksFromHTML(string(BodyBytes), Job.URL)
+	// 7. Extract content using the content extractor factory
+	ExtractedContent, ExtractionErr := CrawlerEngine.ExtractorFactory.ExtractContent(BodyBytes, Result.ContentType, Job.URL)
+	if ExtractionErr != nil {
+		CrawlerEngine.Logger.Warn("content extraction failed, continuing without extracted content",
+			zap.String("url", Job.URL),
+			zap.Error(ExtractionErr))
+		
+		// Continue without extracted content rather than failing the entire job
+		Result.Links = []string{}
+		Result.ExtractedText = ""
+		Result.ExtractedContent = nil
+	} else {
+		// Populate result with extracted content
+		Result.ExtractedContent = ExtractedContent
+		Result.ExtractedText = ExtractedContent.CleanText
+		
+		// Convert ExtractedLink slice to string slice for backward compatibility
+		ExtractedLinks := make([]string, len(ExtractedContent.Links))
+		for i, link := range ExtractedContent.Links {
+			ExtractedLinks[i] = link.URL
+		}
 		Result.Links = ExtractedLinks
 	}
 
-	// 8. Extract main text content for LLM training
-	ExtractedText := CrawlerEngine.ExtractTextContent(string(BodyBytes), Result.ContentType)
-	Result.ExtractedText = ExtractedText
-
-	// 9. Create CrawlResult with all collected data (already populated above)
+	// 8. Create CrawlResult with all collected data (already populated above)
 	Result.Success = true
 	Result.Retryable = false
 
-	CrawlerEngine.Logger.Debug("job processed successfully",
+	// Enhanced logging with extraction details
+	logFields := []zap.Field{
 		zap.Int("worker_id", WorkerID),
 		zap.String("url", Job.URL),
 		zap.Int("status_code", Result.StatusCode),
 		zap.Duration("response_time", Result.ResponseTime),
 		zap.Int("body_size", len(Result.Body)),
-		zap.Int("extracted_links", len(Result.Links)))
+		zap.Int("extracted_links", len(Result.Links)),
+	}
+
+	if Result.ExtractedContent != nil {
+		logFields = append(logFields,
+			zap.String("title", Result.ExtractedContent.Title),
+			zap.Int("word_count", Result.ExtractedContent.Metadata.WordCount),
+			zap.Float64("quality_score", Result.ExtractedContent.QualityScore),
+			zap.Int("text_length", len(Result.ExtractedContent.CleanText)))
+	}
+
+	CrawlerEngine.Logger.Debug("job processed successfully", logFields...)
 
 	return Result
 }
@@ -1003,9 +1043,20 @@ func (CrawlerEngine *CrawlerEngine) GetRateLimiter(Host string) *rate.Limiter {
 	}
 
 	// 5. Create new rate limiter with host-specific configuration
-	// Default: 2 requests per second per host, burst of 3
+	// Use configurable per-host rate limits
+	PerHostRateLimit := CrawlerEngine.Config.PerHostRateLimit
+	if PerHostRateLimit <= 0 {
+		PerHostRateLimit = 3.0 // Default 3 req/sec per host if not configured
+	}
+	PerHostBurst := CrawlerEngine.Config.PerHostBurst
+	if PerHostBurst <= 0 {
+		PerHostBurst = 5 // Default burst of 5 per host if not configured
+	}
+
 	// TODO: 8. Handle rate limit configuration from robots.txt crawl-delay
-	HostLimiter := rate.NewLimiter(rate.Limit(2.0), 3)
+	// Check if we should respect crawl-delay from robots.txt
+	// This would override the configured rate limit for this specific host
+	HostLimiter := rate.NewLimiter(rate.Limit(PerHostRateLimit), PerHostBurst)
 
 	// 6. Store limiter in map for future use
 	CrawlerEngine.HostLimiters[Host] = HostLimiter
@@ -1013,7 +1064,9 @@ func (CrawlerEngine *CrawlerEngine) GetRateLimiter(Host string) *rate.Limiter {
 	CrawlerEngine.Logger.Debug("created new rate limiter for host",
 		zap.String("host", Host),
 		zap.Float64("rate_limit", float64(HostLimiter.Limit())),
-		zap.Int("burst", HostLimiter.Burst()))
+		zap.Int("burst", HostLimiter.Burst()),
+		zap.Float64("configured_per_host_rate", PerHostRateLimit),
+		zap.Int("configured_per_host_burst", PerHostBurst))
 
 	return HostLimiter
 }
@@ -1034,113 +1087,6 @@ func (CrawlerEngine *CrawlerEngine) IsRetryableHTTPStatus(StatusCode int) bool {
 	return client.IsRetryableStatus(StatusCode, CrawlerEngine.HTTPClient.RetryConfig.RetryableStatus)
 }
 
-// ExtractLinksFromHTML extracts links from HTML content
-func (CrawlerEngine *CrawlerEngine) ExtractLinksFromHTML(HTMLContent string, BaseURL string) []string {
-	var Links []string
-
-	// Simple regex-based link extraction
-	// In production, you'd want to use a proper HTML parser like goquery * future implementation *
-	LinkRegex := regexp.MustCompile(`href=["']([^"']+)["']`)
-	Matches := LinkRegex.FindAllStringSubmatch(HTMLContent, -1)
-
-	for _, Match := range Matches {
-		if len(Match) > 1 {
-			LinkURL := Match[1]
-			// Basic URL resolution (relative to absolute)
-			if strings.HasPrefix(LinkURL, "/") {
-				// Relative URL - combine with base
-				HostFromBase, HostErr := frontier.ExtractHostFromURL(BaseURL)
-				if HostErr == nil {
-					if strings.HasPrefix(BaseURL, "https://") {
-						LinkURL = "https://" + HostFromBase + LinkURL
-					} else {
-						LinkURL = "http://" + HostFromBase + LinkURL
-					}
-				}
-			} else if !strings.HasPrefix(LinkURL, "http://") && !strings.HasPrefix(LinkURL, "https://") {
-				// Skip non-HTTP links (mailto:, javascript:, etc.)
-				continue
-			}
-
-			Links = append(Links, LinkURL)
-		}
-	}
-
-	// Remove duplicates
-	SeenLinks := make(map[string]bool)
-	var UniqueLinks []string
-	for _, Link := range Links {
-		if !SeenLinks[Link] {
-			SeenLinks[Link] = true
-			UniqueLinks = append(UniqueLinks, Link)
-		}
-	}
-
-	return UniqueLinks
-}
-
-// ExtractTextContent extracts main text content from various content types
-func (CrawlerEngine *CrawlerEngine) ExtractTextContent(Content string, ContentType string) string {
-	if Content == "" {
-		return ""
-	}
-
-	// Handle different content types
-	ContentTypeLower := strings.ToLower(ContentType)
-
-	switch {
-	case strings.Contains(ContentTypeLower, "text/html"):
-		return CrawlerEngine.extractTextFromHTML(Content)
-	case strings.Contains(ContentTypeLower, "text/plain"):
-		return CrawlerEngine.extractTextFromPlain(Content)
-	case strings.Contains(ContentTypeLower, "application/xml") || strings.Contains(ContentTypeLower, "text/xml"):
-		return CrawlerEngine.extractTextFromXML(Content)
-	default:
-		// For other content types, try to extract text as plain text
-		return CrawlerEngine.extractTextFromPlain(Content)
-	}
-}
-
-// extractTextFromHTML extracts text content from HTML
-func (CrawlerEngine *CrawlerEngine) extractTextFromHTML(HTMLContent string) string {
-	// Simple HTML tag removal - in production you'd use a proper HTML parser
-	TagRegex := regexp.MustCompile(`<[^>]*>`)
-	TextContent := TagRegex.ReplaceAllString(HTMLContent, " ")
-
-	// Remove script and style content
-	ScriptRegex := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	TextContent = ScriptRegex.ReplaceAllString(TextContent, " ")
-
-	StyleRegex := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	TextContent = StyleRegex.ReplaceAllString(TextContent, " ")
-
-	// Normalize whitespace
-	WhitespaceRegex := regexp.MustCompile(`\s+`)
-	TextContent = WhitespaceRegex.ReplaceAllString(TextContent, " ")
-
-	return strings.TrimSpace(TextContent)
-}
-
-// extractTextFromPlain handles plain text content
-func (CrawlerEngine *CrawlerEngine) extractTextFromPlain(PlainContent string) string {
-	// For plain text, just normalize whitespace
-	WhitespaceRegex := regexp.MustCompile(`\s+`)
-	TextContent := WhitespaceRegex.ReplaceAllString(PlainContent, " ")
-	return strings.TrimSpace(TextContent)
-}
-
-// extractTextFromXML extracts text content from XML
-func (CrawlerEngine *CrawlerEngine) extractTextFromXML(XMLContent string) string {
-	// Simple XML tag removal - similar to HTML
-	TagRegex := regexp.MustCompile(`<[^>]*>`)
-	TextContent := TagRegex.ReplaceAllString(XMLContent, " ")
-
-	// Normalize whitespace
-	WhitespaceRegex := regexp.MustCompile(`\s+`)
-	TextContent = WhitespaceRegex.ReplaceAllString(TextContent, " ")
-
-	return strings.TrimSpace(TextContent)
-}
 
 // cleanupRateLimiters removes unused rate limiters to prevent memory leaks
 func (CrawlerEngine *CrawlerEngine) cleanupRateLimiters(Context context.Context) {

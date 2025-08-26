@@ -14,46 +14,23 @@ import (
 	"go.uber.org/zap"
 )
 
-// config represents the complete application configuration
+// Config represents the complete application configuration
 type Config struct {
-	// Crawler settings
 	Crawler CrawlerConfig `mapstructure:"crawler" yaml:"crawler" json:"crawler"`
-
-	// Rate limiting configuration
 	RateLimit RateLimitConfig `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
-
-	// Content processing settings
 	Content ContentConfig `mapstructure:"content" yaml:"content" json:"content"`
-
-	// Storage configuration
 	Storage StorageConfig `mapstructure:"storage" yaml:"storage" json:"storage"`
-
-	// Monitoring and observability
 	Monitoring MonitoringConfig `mapstructure:"monitoring" yaml:"monitoring" json:"monitoring"`
-
-	// HTTP client settings
 	HTTP HTTPConfig `mapstructure:"http" yaml:"http" json:"http"`
-
-	// URL frontier configuration
 	Frontier FrontierConfig `mapstructure:"frontier" yaml:"frontier" json:"frontier"`
-
-	// Robots.txt settings
 	Robots RobotsConfig `mapstructure:"robots" yaml:"robots" json:"robots"`
-
-	// Redis configuration (optional)
 	Redis RedisConfig `mapstructure:"redis" yaml:"redis" json:"redis"`
-
-	// Security settings
 	Security SecurityConfig `mapstructure:"security" yaml:"security" json:"security"`
-
-	// Feature flags
 	Features FeatureConfig `mapstructure:"features" yaml:"features" json:"features"`
-
-	// Internal metadata (not serialized)
-	configFileUsed string `json:"-" yaml:"-"`
+	ConfigFileUsed string `json:"-" yaml:"-"`
 }
 
-// crawlerConfig holds basic crawler settings
+// CrawlerConfig holds basic crawler settings
 type CrawlerConfig struct {
 	MaxPages          int           `mapstructure:"max_pages" yaml:"max_pages" json:"max_pages"`
 	MaxDepth          int           `mapstructure:"max_depth" yaml:"max_depth" json:"max_depth"`
@@ -65,9 +42,13 @@ type CrawlerConfig struct {
 	ExcludePatterns   []string      `mapstructure:"exclude_patterns" yaml:"exclude_patterns" json:"exclude_patterns"`
 	AllowedDomains    []string      `mapstructure:"allowed_domains" yaml:"allowed_domains" json:"allowed_domains"`
 	BlockedDomains    []string      `mapstructure:"blocked_domains" yaml:"blocked_domains" json:"blocked_domains"`
+	GlobalRateLimit   float64       `mapstructure:"global_rate_limit" yaml:"global_rate_limit" json:"global_rate_limit"`
+	GlobalBurst       int           `mapstructure:"global_burst" yaml:"global_burst" json:"global_burst"`
+	PerHostRateLimit  float64       `mapstructure:"per_host_rate_limit" yaml:"per_host_rate_limit" json:"per_host_rate_limit"`
+	PerHostBurst      int           `mapstructure:"per_host_burst" yaml:"per_host_burst" json:"per_host_burst"`
 }
 
-// rateLimitConfig holds rate limiting settings
+// RateLimitConfig holds rate limiting settings
 type RateLimitConfig struct {
 	RequestsPerSecond float64       `mapstructure:"requests_per_second" yaml:"requests_per_second" json:"requests_per_second"`
 	Burst             int           `mapstructure:"burst" yaml:"burst" json:"burst"`
@@ -80,7 +61,7 @@ type RateLimitConfig struct {
 	MaxRequests       int           `mapstructure:"max_requests" yaml:"max_requests" json:"max_requests"`
 }
 
-// contentConfig holds content processing settings
+// ContentConfig holds content processing settings
 type ContentConfig struct {
 	MinTextLength       int         `mapstructure:"min_text_length" yaml:"min_text_length" json:"min_text_length"`
 	MaxTextLength       int         `mapstructure:"max_text_length" yaml:"max_text_length" json:"max_text_length"`
@@ -93,7 +74,7 @@ type ContentConfig struct {
 	Deduplication       DedupConfig `mapstructure:"deduplication" yaml:"deduplication" json:"deduplication"`
 }
 
-// dedupConfig holds deduplication settings
+// DedupConfig holds deduplication settings
 type DedupConfig struct {
 	Enabled               bool    `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	UrlFingerprinting     bool    `mapstructure:"url_fingerprinting" yaml:"url_fingerprinting" json:"url_fingerprinting"`
@@ -102,7 +83,7 @@ type DedupConfig struct {
 	SimilarityThreshold   float64 `mapstructure:"similarity_threshold" yaml:"similarity_threshold" json:"similarity_threshold"`
 }
 
-// storageConfig holds storage backend settings
+// StorageConfig holds storage backend settings
 type StorageConfig struct {
 	Type                  string        `mapstructure:"type" yaml:"type" json:"type"` // type is a keyword lol
 	Path                  string        `mapstructure:"path" yaml:"path" json:"path"`
@@ -124,7 +105,7 @@ type StorageConfig struct {
 	S3UseSSL              bool          `mapstructure:"s3_use_ssl" yaml:"s3_use_ssl" json:"s3_use_ssl"`
 }
 
-// monitoringConfig holds monitoring and observability settings
+// MonitoringConfig holds monitoring and observability settings
 type MonitoringConfig struct {
 	LogLevel          string  `mapstructure:"log_level" yaml:"log_level" json:"log_level"`
 	LogFormat         string  `mapstructure:"log_format" yaml:"log_format" json:"log_format"`
@@ -145,7 +126,7 @@ type MonitoringConfig struct {
 	TracingSampleRate float64 `mapstructure:"tracing_sample_rate" yaml:"tracing_sample_rate" json:"tracing_sample_rate"`
 }
 
-// httpConfig holds HTTP client settings
+// HTTPConfig holds HTTP client settings
 type HTTPConfig struct {
 	MaxIdleConnections        int           `mapstructure:"max_idle_connections" yaml:"max_idle_connections" json:"max_idle_connections"`
 	MaxIdleConnectionsPerHost int           `mapstructure:"max_idle_connections_per_host" yaml:"max_idle_connections_per_host" json:"max_idle_connections_per_host"`
@@ -159,7 +140,7 @@ type HTTPConfig struct {
 	AcceptEncoding            string        `mapstructure:"accept_encoding" yaml:"accept_encoding" json:"accept_encoding"`
 }
 
-// frontierConfig holds URL frontier settings
+// FrontierConfig holds URL frontier settings
 type FrontierConfig struct {
 	QueueCapacity      int           `mapstructure:"queue_capacity" yaml:"queue_capacity" json:"queue_capacity"`
 	PriorityQueues     int           `mapstructure:"priority_queues" yaml:"priority_queues" json:"priority_queues"`
@@ -172,7 +153,7 @@ type FrontierConfig struct {
 	SortQueryParams    bool          `mapstructure:"sort_query_params" yaml:"sort_query_params" json:"sort_query_params"`
 }
 
-// robotsConfig holds robots.txt settings
+// RobotsConfig holds robots.txt settings
 type RobotsConfig struct {
 	Enabled            bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	CacheDuration      time.Duration `mapstructure:"cache_duration" yaml:"cache_duration" json:"cache_duration"`
@@ -181,7 +162,7 @@ type RobotsConfig struct {
 	RespectCrawlDelay  bool          `mapstructure:"respect_crawl_delay" yaml:"respect_crawl_delay" json:"respect_crawl_delay"`
 }
 
-// redisConfig holds Redis settings
+// RedisConfig holds Redis settings
 type RedisConfig struct {
 	Addr               string        `mapstructure:"addr" yaml:"addr" json:"addr"`
 	Password           string        `mapstructure:"password" yaml:"password" json:"password"`
@@ -192,7 +173,7 @@ type RedisConfig struct {
 	RetryDelay         time.Duration `mapstructure:"retry_delay" yaml:"retry_delay" json:"retry_delay"`
 }
 
-// securityConfig holds security settings
+// SecurityConfig holds security settings
 type SecurityConfig struct {
 	TlsInsecureSkipVerify bool     `mapstructure:"tls_insecure_skip_verify" yaml:"tls_insecure_skip_verify" json:"tls_insecure_skip_verify"`
 	TlsMinVersion         string   `mapstructure:"tls_min_version" yaml:"tls_min_version" json:"tls_min_version"`
@@ -205,7 +186,7 @@ type SecurityConfig struct {
 	BlockedIPs            []string `mapstructure:"blocked_ips" yaml:"blocked_ips" json:"blocked_ips"`
 }
 
-// featureConfig holds feature flags
+// FeatureConfig holds feature flags
 type FeatureConfig struct {
 	JavaScriptRendering     bool `mapstructure:"javascript_rendering" yaml:"javascript_rendering" json:"javascript_rendering"`
 	SemanticAnalysis        bool `mapstructure:"semantic_analysis" yaml:"semantic_analysis" json:"semantic_analysis"`
@@ -214,73 +195,56 @@ type FeatureConfig struct {
 	RealTimeStreaming       bool `mapstructure:"real_time_streaming" yaml:"real_time_streaming" json:"real_time_streaming"`
 }
 
-// loadConfig loads configuration from multiple sources in order of precedence:
-// 1. Command line flags
-// 2. Environment variables
-// 3. Configuration file
-// 4. Default values
 func LoadConfig(configPath string, flags *pflag.FlagSet) (*Config, error) {
 	v := viper.New()
 
 	SetDefaults(v)
 
-	// Set up configuration file paths
 	if configPath != "" {
-		// Check if the specified config file exists
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("specified config file does not exist: %s", configPath)
 		}
 		v.SetConfigFile(configPath)
 	} else {
-		// Look for config file in multiple locations
 		v.SetConfigName("config")
 		v.SetConfigType("yaml")
 		v.AddConfigPath(".")
 		v.AddConfigPath("./config")
 
-		// Add home directory path
 		if home, err := os.UserHomeDir(); err == nil {
 			v.AddConfigPath(filepath.Join(home, ".crawler"))
 		}
 		v.AddConfigPath("/etc/crawler")
 	}
 
-	// Set environment variable configuration with comprehensive key mapping
 	v.SetEnvPrefix("CRAWLER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	v.AutomaticEnv()
 
-	// Bind specific environment variables for better support
 	BindEnvVariables(v)
 
-	// Read configuration file if it exists
-	configFileUsed := ""
+	ConfigFileUsed := ""
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
-		// Config file not found; using defaults and env vars
 	} else {
-		configFileUsed = v.ConfigFileUsed()
+		ConfigFileUsed = v.ConfigFileUsed()
 	}
 
-	// Bind command line flags if provided
 	if flags != nil {
 		if err := v.BindPFlags(flags); err != nil {
 			return nil, fmt.Errorf("failed to bind command flags: %w", err)
 		}
 	}
 
-	// Unmarshal configuration
 	var config Config
 	if err := v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Set metadata about config loading
-	config.configFileUsed = configFileUsed
+	config.ConfigFileUsed = ConfigFileUsed
 
-	// Validate configuration
 	if err := ValidateConfig(&config); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
@@ -323,6 +287,10 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("crawler.concurrent_workers", 10)
 	v.SetDefault("crawler.request_timeout", "30s")
 	v.SetDefault("crawler.user_agent", "LLMCrawler/1.0 (+https://github.com/Almahr1/quert)")
+	v.SetDefault("crawler.global_rate_limit", 5.0)
+	v.SetDefault("crawler.global_burst", 10)
+	v.SetDefault("crawler.per_host_rate_limit", 3.0)
+	v.SetDefault("crawler.per_host_burst", 5)
 
 	// Rate limiting defaults
 	v.SetDefault("rate_limit.requests_per_second", 2.0)
@@ -738,7 +706,7 @@ func RedactConnectionString(connStr string) string {
 	return connStr
 }
 
-// ConfigFileUsed returns the path of the configuration file that was used to load the config
-func (c *Config) ConfigFileUsed() string {
-	return c.configFileUsed
+// GetConfigFileUsed returns the path of the configuration file that was used to load the config
+func (c *Config) GetConfigFileUsed() string {
+	return c.ConfigFileUsed
 }

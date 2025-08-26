@@ -4,6 +4,7 @@
 BINARY_NAME=crawler
 BINARY_PATH=./bin/$(BINARY_NAME)
 MAIN_PATH=./cmd/crawler
+EXAMPLE_DIR=./examples
 GO_FILES=$(shell find . -name "*.go" -type f -not -path "./vendor/*")
 TEST_TIMEOUT=30s
 
@@ -15,7 +16,7 @@ BUILD_TIME=$(shell date +%Y-%m-%dT%H:%M:%S%z)
 # Go build flags
 LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)"
 
-.PHONY: help build test run clean fmt lint deps dev docker-build docker-run benchmark coverage profile install-tools
+.PHONY: help build test run clean fmt lint deps dev benchmark coverage profile install-tools examples clean-all test-examples test-all build-examples run-link-collector run-domain-crawler run-quick-harvest run-basic-crawl test-extractor test-crawler test-robots
 
 # Default target
 help: ## Show this help message
@@ -186,25 +187,61 @@ profile-view-cpu: profile-cpu ## View CPU profile
 profile-view-mem: profile-mem ## View memory profile
 	go tool pprof profiles/mem.prof
 
-# Docker targets
-docker-build: ## Build Docker image
-	@echo "Building Docker image..."
-	docker build -t $(BINARY_NAME):$(VERSION) -t $(BINARY_NAME):latest .
 
-docker-run: ## Run Docker container
-	@echo "Running Docker container..."
-	docker run --rm -it \
-		-v $(PWD)/config:/app/config:ro \
-		-v $(PWD)/data:/app/data \
-		$(BINARY_NAME):latest
+# Example targets
+build-examples: ## Build all example binaries
+	@echo "Building example binaries..."
+	@mkdir -p bin/examples
+	@for example in $$(find $(EXAMPLE_DIR) -name "main.go" -type f); do \
+		example_dir=$$(dirname $$example); \
+		example_name=$$(basename $$example_dir); \
+		echo "Building example: $$example_name"; \
+		go build -o bin/examples/$$example_name $$example; \
+	done
+	@echo "Example binaries built in bin/examples/"
 
-docker-compose-up: ## Start services with docker-compose
-	@echo "Starting services..."
-	docker-compose up -d
+run-link-collector: ## Run the link collector example
+	@echo "Running link collector example..."
+	go run $(EXAMPLE_DIR)/link_collector/main.go
 
-docker-compose-down: ## Stop services
-	@echo "Stopping services..."
-	docker-compose down
+run-domain-crawler: ## Run the domain crawler example
+	@echo "Running domain crawler example..."
+	go run $(EXAMPLE_DIR)/domain_crawler/main.go
+
+run-quick-harvest: ## Run the quick harvest example
+	@echo "Running quick harvest example..."
+	go run $(EXAMPLE_DIR)/quick_harvest/main.go
+
+run-basic-crawl: ## Run the basic crawl example
+	@echo "Running basic crawl example..."
+	go run $(EXAMPLE_DIR)/basic_crawl/main.go
+
+# Testing targets
+test-examples: ## Test all examples compile correctly
+	@echo "Testing examples compile correctly..."
+	@for example in $$(find $(EXAMPLE_DIR) -name "main.go" -type f); do \
+		example_dir=$$(dirname $$example); \
+		example_name=$$(basename $$example_dir); \
+		echo "Testing example: $$example_name"; \
+		go build -o /tmp/test_$$example_name $$example && rm -f /tmp/test_$$example_name; \
+	done
+	@echo "All examples compile successfully!"
+
+test-all: test test-examples ## Run all tests including examples
+	@echo "All tests completed successfully!"
+
+# Enhanced test targets
+test-extractor: ## Run content extractor tests
+	@echo "Running content extractor tests..."
+	go test -timeout $(TEST_TIMEOUT) -v ./internal/extractor/...
+
+test-crawler: ## Run crawler engine tests
+	@echo "Running crawler engine tests..."
+	go test -timeout $(TEST_TIMEOUT) -v ./internal/crawler/...
+
+test-robots: ## Run robots.txt tests
+	@echo "Running robots.txt tests..."
+	go test -timeout $(TEST_TIMEOUT) -v ./internal/robots/...
 
 # Cleanup targets
 clean: ## Clean build artifacts
@@ -215,6 +252,22 @@ clean: ## Clean build artifacts
 	rm -rf dist/
 	go clean -cache
 	go clean -testcache
+
+clean-all: clean ## Clean all artifacts including example outputs
+	@echo "Cleaning all artifacts..."
+	rm -rf bin/
+	rm -rf coverage/
+	rm -rf profiles/
+	rm -rf dist/
+	@echo "Removing example output files..."
+	@find . -name "collected_links*.txt" -delete
+	@find . -name "links_*.txt" -delete
+	@find . -name "crawl_stats_*.txt" -delete
+	@find . -name "content_samples_*.txt" -delete
+	@find . -name "harvested_links_*.txt" -delete
+	go clean -cache
+	go clean -testcache
+	@echo "All artifacts cleaned!"
 
 clean-deps: ## Clean dependency cache
 	@echo "Cleaning dependency cache..."
@@ -257,11 +310,11 @@ migrate-down: ## Run database migrations down
 	# Add your rollback command here
 
 # Quick development workflow for current phase
-quick: fmt lint test build ## Quick development workflow (format, lint, test all, build)
+quick: fmt lint test-all build-examples ## Quick development workflow (format, lint, test all, build examples)
 	@echo "Quick development workflow completed successfully!"
 
-# Current development focus workflow
-current: fmt test-config test-http test-url build ## Test current implemented components
+# Current development focus workflow  
+current: fmt test-config test-http test-url test-extractor test-crawler test-robots build ## Test current implemented components
 	@echo "Current component testing completed successfully!"
 
 # Pre-commit check
@@ -281,7 +334,6 @@ setup-check: ## Check if foundation phase is complete
 	@test -f README.md && echo "✓ README.md exists" || echo "✗ README.md missing"
 	@test -f LICENSE && echo "✓ LICENSE exists" || echo "✗ LICENSE exists"
 	@test -f Makefile && echo "✓ Makefile exists" || echo "✗ Makefile missing"
-	@test -f docker-compose.yml && echo "✓ docker-compose.yml exists" || echo "✗ docker-compose.yml missing"
 	@echo ""
 	@echo "=== Core Components ==="
 	@test -f internal/config/config.go && echo "✓ Configuration system" || echo "✗ Configuration missing"

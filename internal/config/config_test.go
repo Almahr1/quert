@@ -103,7 +103,7 @@ monitoring:
 	assert.False(t, config.Monitoring.MetricsEnabled)
 
 	// Verify config file used
-	assert.Equal(t, configPath, config.ConfigFileUsed())
+	assert.Equal(t, configPath, config.ConfigFileUsed)
 }
 
 // TestLoadConfigFromEnvironment tests loading configuration from environment variables
