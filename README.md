@@ -134,39 +134,7 @@ The crawler uses a flexible configuration system supporting YAML files, JSON, an
 This is the provided `config.yaml` file:
 
 ```yaml
-# Basic crawler settings
-crawler:
-  max_pages: 10000
-  max_depth: 5
-  concurrent_workers: 10
-  request_timeout: 30s
-  user_agent: "LLMCrawler/1.0"
-
-# Rate limiting
-rate_limit:
-  requests_per_second: 2.0
-  burst: 10
-  per_host_limit: true
-
-# Content processing
-content:
-  min_text_length: 100
-  max_text_length: 100000
-  languages: ["en", "es", "fr", "de"]
-  quality_threshold: 0.7
-
-# Storage
-storage:
-  type: "file" # options: file, postgres, badger
-  path: "./data"
-  batch_size: 1000
-  compression: true
-
-# Monitoring
-monitoring:
-  metrics_port: 8080
-  log_level: "info"
-  enable_profiling: false
+Will Be Updated Soon...
 ```
 
 ### Environment Variables
@@ -174,11 +142,7 @@ monitoring:
 All configuration options can be overridden with environment variables:
 
 ```bash
-export CRAWLER_MAX_PAGES=50000
-export CRAWLER_CONCURRENT_WORKERS=20
-export RATE_LIMIT_REQUESTS_PER_SECOND=1.0
-export STORAGE_TYPE=postgres
-export STORAGE_CONNECTION_STRING="postgresql://user:pass@localhost/crawler"
+
 ```
 
 ### Advanced Configuration
