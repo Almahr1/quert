@@ -27,13 +27,13 @@ func main() {
 	crawlerConfig := &config.CrawlerConfig{
 		MaxPages:          1000,
 		MaxDepth:          1,
-		ConcurrentWorkers: 40,
+		ConcurrentWorkers: 100,
 		RequestTimeout:    30 * time.Second,
 		UserAgent:         "Quert-LinkCollector/1.0 (+https://github.com/Almahr1/quert) Educational Use",
-		GlobalRateLimit:  10.0,
-		GlobalBurst:      15,
-		PerHostRateLimit: 5.0,
-		PerHostBurst:     10,
+		GlobalRateLimit:   10.0,
+		GlobalBurst:       15,
+		PerHostRateLimit:  5.0,
+		PerHostBurst:      10,
 		SeedURLs: []string{
 			"https://lobste.rs",
 			"https://reddit.com/r/programming",

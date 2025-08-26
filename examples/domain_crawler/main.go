@@ -28,10 +28,10 @@ func main() {
 
 	// Target domains - choose reputable sites that allow crawling
 	targetDomains := []string{
-		"quotes.toscrape.com",     // Scraping practice site
-		"httpbin.org",             // HTTP testing service
-		"example.com",             // RFC example domain
-		"news.ycombinator.com",    // Hacker News (check robots.txt first!)
+		"quotes.toscrape.com",  // Scraping practice site
+		"httpbin.org",          // HTTP testing service
+		"example.com",          // RFC example domain
+		"news.ycombinator.com", // Hacker News (check robots.txt first!)
 	}
 
 	logger.Info("Starting systematic domain crawler",
@@ -44,7 +44,7 @@ func main() {
 		fmt.Printf("%d. %s\n", i+1, domain)
 	}
 	fmt.Print("Select domain to crawl (1-4, or 0 for all): ")
-	
+
 	var choice int
 	fmt.Scanf("%d", &choice)
 
@@ -73,9 +73,9 @@ func main() {
 
 	// Configure crawler for domain-focused crawling
 	crawlerConfig := &config.CrawlerConfig{
-		MaxPages:          500,  // Increase for domain crawling
-		MaxDepth:          4,    // Go deeper within domain
-		ConcurrentWorkers: 3,    // Still be respectful
+		MaxPages:          500, // Increase for domain crawling
+		MaxDepth:          4,   // Go deeper within domain
+		ConcurrentWorkers: 50,  // Still be respectful
 		RequestTimeout:    30 * time.Second,
 		UserAgent:         "Quert-DomainCrawler/1.0 (+https://github.com/Almahr1/quert) Research",
 		SeedURLs:          seedURLs,
@@ -101,10 +101,10 @@ func main() {
 		IdleConnectionTimeout:     45 * time.Second,
 		DisableKeepAlives:         false,
 		Timeout:                   30 * time.Second,
-		DialTimeout:              10 * time.Second,
-		TlsHandshakeTimeout:      15 * time.Second,
-		ResponseHeaderTimeout:    15 * time.Second,
-		DisableCompression:       false,
+		DialTimeout:               10 * time.Second,
+		TlsHandshakeTimeout:       15 * time.Second,
+		ResponseHeaderTimeout:     15 * time.Second,
+		DisableCompression:        false,
 	}
 
 	// Create enhanced output files
@@ -132,10 +132,10 @@ func main() {
 	// Initialize domain stats
 	for _, domain := range selectedDomains {
 		domainStats[domain] = &DomainStats{
-			Domain:      domain,
-			LinksFound:  0,
+			Domain:       domain,
+			LinksFound:   0,
 			PagesVisited: 0,
-			Errors:      0,
+			Errors:       0,
 		}
 	}
 
@@ -190,29 +190,29 @@ func main() {
 
 // LinkInfo holds detailed information about collected links
 type LinkInfo struct {
-	URL          string
-	Text         string
-	SourceURL    string
-	Domain       string
-	Internal     bool
-	FirstSeen    time.Time
-	Frequency    int
-	ContentType  string
+	URL         string
+	Text        string
+	SourceURL   string
+	Domain      string
+	Internal    bool
+	FirstSeen   time.Time
+	Frequency   int
+	ContentType string
 }
 
 // DomainStats tracks statistics per domain
 type DomainStats struct {
-	Domain       string
-	LinksFound   int
-	PagesVisited int
-	Errors       int
-	PageTitles   []string
+	Domain        string
+	LinksFound    int
+	PagesVisited  int
+	Errors        int
+	PageTitles    []string
 	ResponseTimes []time.Duration
 }
 
 // processResults handles crawler results with enhanced data collection
-func processResults(engine *crawler.CrawlerEngine, linkData map[string]LinkInfo, 
-	domainStats map[string]*DomainStats, dataMutex *sync.RWMutex, 
+func processResults(engine *crawler.CrawlerEngine, linkData map[string]LinkInfo,
+	domainStats map[string]*DomainStats, dataMutex *sync.RWMutex,
 	logger *zap.Logger, cancel context.CancelFunc) {
 
 	results := engine.GetResults()
@@ -243,7 +243,7 @@ func processResults(engine *crawler.CrawlerEngine, linkData map[string]LinkInfo,
 			// Process each link found
 			for _, link := range content.Links {
 				linkURL := link.URL
-				
+
 				// Update or create link info
 				info, exists := linkData[linkURL]
 				if !exists {
@@ -256,13 +256,13 @@ func processResults(engine *crawler.CrawlerEngine, linkData map[string]LinkInfo,
 						Frequency:   1,
 						ContentType: result.ContentType,
 					}
-					
+
 					linkDomain, _ := frontier.ExtractDomain(linkURL)
 					info.Domain = linkDomain
 				} else {
 					info.Frequency++
 				}
-				
+
 				linkData[linkURL] = info
 			}
 
@@ -288,7 +288,7 @@ func processResults(engine *crawler.CrawlerEngine, linkData map[string]LinkInfo,
 						RequestID: fmt.Sprintf("internal-%d", time.Now().UnixNano()),
 						Context:   result.Job.Context,
 					}
-					
+
 					engine.SubmitJob(job) // Will be filtered by crawler if already processed
 				}
 			}
@@ -314,8 +314,8 @@ func processResults(engine *crawler.CrawlerEngine, linkData map[string]LinkInfo,
 }
 
 // saveResults saves all collected data to files
-func saveResults(linkData map[string]LinkInfo, domainStats map[string]*DomainStats, 
-	engine *crawler.CrawlerEngine, linksFile, statsFile, contentFile string, 
+func saveResults(linkData map[string]LinkInfo, domainStats map[string]*DomainStats,
+	engine *crawler.CrawlerEngine, linksFile, statsFile, contentFile string,
 	logger *zap.Logger) error {
 
 	// Save links
@@ -336,7 +336,7 @@ func saveResults(linkData map[string]LinkInfo, domainStats map[string]*DomainSta
 	for _, info := range linkData {
 		sortedLinks = append(sortedLinks, info)
 	}
-	
+
 	sort.Slice(sortedLinks, func(i, j int) bool {
 		return sortedLinks[i].Frequency > sortedLinks[j].Frequency
 	})
@@ -373,7 +373,7 @@ func saveResults(linkData map[string]LinkInfo, domainStats map[string]*DomainSta
 			fmt.Fprintf(statsF, "  Pages Visited: %d\n", stats.PagesVisited)
 			fmt.Fprintf(statsF, "  Links Found: %d\n", stats.LinksFound)
 			fmt.Fprintf(statsF, "  Errors: %d\n", stats.Errors)
-			
+
 			if len(stats.ResponseTimes) > 0 {
 				var total time.Duration
 				for _, rt := range stats.ResponseTimes {
