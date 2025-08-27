@@ -16,7 +16,7 @@ BUILD_TIME=$(shell date +%Y-%m-%dT%H:%M:%S%z)
 # Go build flags
 LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)"
 
-.PHONY: help build test run clean fmt lint deps dev benchmark coverage profile install-tools examples clean-all test-examples test-all build-examples run-link-collector run-domain-crawler run-quick-harvest run-basic-crawl test-extractor test-crawler test-robots
+.PHONY: help build test run clean fmt lint deps dev benchmark coverage profile install-tools examples clean-all test-examples test-all build-examples run-simple-example run-comprehensive-crawler run-basic-crawl test-extractor test-crawler test-robots
 
 # Default target
 help: ## Show this help message
@@ -200,17 +200,13 @@ build-examples: ## Build all example binaries
 	done
 	@echo "Example binaries built in bin/examples/"
 
-run-link-collector: ## Run the link collector example
-	@echo "Running link collector example..."
-	go run $(EXAMPLE_DIR)/link_collector/main.go
+run-simple-example: ## Run the simple crawler example
+	@echo "Running simple crawler example..."
+	go run $(EXAMPLE_DIR)/simple_example/main.go
 
-run-domain-crawler: ## Run the domain crawler example
-	@echo "Running domain crawler example..."
-	go run $(EXAMPLE_DIR)/domain_crawler/main.go
-
-run-quick-harvest: ## Run the quick harvest example
-	@echo "Running quick harvest example..."
-	go run $(EXAMPLE_DIR)/quick_harvest/main.go
+run-comprehensive-crawler: ## Run the comprehensive crawler example
+	@echo "Running comprehensive crawler example..."
+	go run $(EXAMPLE_DIR)/comprehensive_crawler/main.go
 
 run-basic-crawl: ## Run the basic crawl example
 	@echo "Running basic crawl example..."
@@ -260,11 +256,9 @@ clean-all: clean ## Clean all artifacts including example outputs
 	rm -rf profiles/
 	rm -rf dist/
 	@echo "Removing example output files..."
-	@find . -name "collected_links*.txt" -delete
-	@find . -name "links_*.txt" -delete
-	@find . -name "crawl_stats_*.txt" -delete
-	@find . -name "content_samples_*.txt" -delete
-	@find . -name "harvested_links_*.txt" -delete
+	@find . -name "*.log" -delete
+	@find . -name "crawl_output_*.txt" -delete
+	@find . -name "extracted_content_*.json" -delete
 	go clean -cache
 	go clean -testcache
 	@echo "All artifacts cleaned!"
