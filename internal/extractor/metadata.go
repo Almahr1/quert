@@ -493,4 +493,3 @@ func (h *HTMLContentExtractor) ExtractText(content []byte, contentType string) (
 	allText := h.ExtractAllText(doc)
 	return h.CleanTextContent(allText), nil
 }
-

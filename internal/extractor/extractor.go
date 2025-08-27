@@ -49,21 +49,21 @@ type ExtractedImage struct {
 
 // ContentMetadata holds metadata about the extracted content
 type ContentMetadata struct {
-	Language        string            `json:"language"`
-	Author          string            `json:"author"`
-	PublishedDate   string            `json:"published_date"`
-	ModifiedDate    string            `json:"modified_date"`
-	Description     string            `json:"description"`
-	Keywords        []string          `json:"keywords"`
-	ContentLength   int               `json:"content_length"`
-	WordCount       int               `json:"word_count"`
-	SentenceCount   int               `json:"sentence_count"`
-	ParagraphCount  int               `json:"paragraph_count"`
-	LinkCount       int               `json:"link_count"`
-	ImageCount      int               `json:"image_count"`
-	Tags            []string          `json:"tags"`
-	Categories      []string          `json:"categories"`
-	CustomMetadata  map[string]string `json:"custom_metadata"`
+	Language       string            `json:"language"`
+	Author         string            `json:"author"`
+	PublishedDate  string            `json:"published_date"`
+	ModifiedDate   string            `json:"modified_date"`
+	Description    string            `json:"description"`
+	Keywords       []string          `json:"keywords"`
+	ContentLength  int               `json:"content_length"`
+	WordCount      int               `json:"word_count"`
+	SentenceCount  int               `json:"sentence_count"`
+	ParagraphCount int               `json:"paragraph_count"`
+	LinkCount      int               `json:"link_count"`
+	ImageCount     int               `json:"image_count"`
+	Tags           []string          `json:"tags"`
+	Categories     []string          `json:"categories"`
+	CustomMetadata map[string]string `json:"custom_metadata"`
 }
 
 // ContentExtractor interface defines content extraction methods
@@ -98,17 +98,17 @@ type XMLContentExtractor struct {
 
 // ExtractorConfig holds configuration for content extractors
 type ExtractorConfig struct {
-	MinTextLength        int     `mapstructure:"min_text_length" yaml:"min_text_length" json:"min_text_length"`
-	MaxTextLength        int     `mapstructure:"max_text_length" yaml:"max_text_length" json:"max_text_length"`
-	RemoveBoilerplate    bool    `mapstructure:"remove_boilerplate" yaml:"remove_boilerplate" json:"remove_boilerplate"`
-	ExtractMainContent   bool    `mapstructure:"extract_main_content" yaml:"extract_main_content" json:"extract_main_content"`
-	PreserveFormatting   bool    `mapstructure:"preserve_formatting" yaml:"preserve_formatting" json:"preserve_formatting"`
-	NormalizeWhitespace  bool    `mapstructure:"normalize_whitespace" yaml:"normalize_whitespace" json:"normalize_whitespace"`
-	ExtractLinks         bool    `mapstructure:"extract_links" yaml:"extract_links" json:"extract_links"`
-	ExtractImages        bool    `mapstructure:"extract_images" yaml:"extract_images" json:"extract_images"`
-	ExtractMetadata      bool    `mapstructure:"extract_metadata" yaml:"extract_metadata" json:"extract_metadata"`
-	CalculateQuality     bool    `mapstructure:"calculate_quality" yaml:"calculate_quality" json:"calculate_quality"`
-	QualityThreshold     float64 `mapstructure:"quality_threshold" yaml:"quality_threshold" json:"quality_threshold"`
+	MinTextLength        int               `mapstructure:"min_text_length" yaml:"min_text_length" json:"min_text_length"`
+	MaxTextLength        int               `mapstructure:"max_text_length" yaml:"max_text_length" json:"max_text_length"`
+	RemoveBoilerplate    bool              `mapstructure:"remove_boilerplate" yaml:"remove_boilerplate" json:"remove_boilerplate"`
+	ExtractMainContent   bool              `mapstructure:"extract_main_content" yaml:"extract_main_content" json:"extract_main_content"`
+	PreserveFormatting   bool              `mapstructure:"preserve_formatting" yaml:"preserve_formatting" json:"preserve_formatting"`
+	NormalizeWhitespace  bool              `mapstructure:"normalize_whitespace" yaml:"normalize_whitespace" json:"normalize_whitespace"`
+	ExtractLinks         bool              `mapstructure:"extract_links" yaml:"extract_links" json:"extract_links"`
+	ExtractImages        bool              `mapstructure:"extract_images" yaml:"extract_images" json:"extract_images"`
+	ExtractMetadata      bool              `mapstructure:"extract_metadata" yaml:"extract_metadata" json:"extract_metadata"`
+	CalculateQuality     bool              `mapstructure:"calculate_quality" yaml:"calculate_quality" json:"calculate_quality"`
+	QualityThreshold     float64           `mapstructure:"quality_threshold" yaml:"quality_threshold" json:"quality_threshold"`
 	ContentSelectors     []ContentSelector `mapstructure:"content_selectors" yaml:"content_selectors" json:"content_selectors"`
 	BoilerplateSelectors []string          `mapstructure:"boilerplate_selectors" yaml:"boilerplate_selectors" json:"boilerplate_selectors"`
 }
@@ -122,11 +122,11 @@ type ContentSelector struct {
 
 // BoilerplateRule defines rules for removing boilerplate content
 type BoilerplateRule struct {
-	Name        string   `json:"name"`
-	Selectors   []string `json:"selectors"`
+	Name         string   `json:"name"`
+	Selectors    []string `json:"selectors"`
 	TextPatterns []string `json:"text_patterns"`
-	MinLength   int      `json:"min_length"`
-	MaxLength   int      `json:"max_length"`
+	MinLength    int      `json:"min_length"`
+	MaxLength    int      `json:"max_length"`
 }
 
 // NewHTMLContentExtractor creates a new HTML content extractor
@@ -178,7 +178,7 @@ func NewXMLContentExtractor(config *ExtractorConfig, logger *zap.Logger) *XMLCon
 // ExtractContent extracts all content from HTML using goquery
 func (h *HTMLContentExtractor) ExtractContent(content []byte, contentType string, sourceURL string) (*ExtractedContent, error) {
 	startTime := time.Now()
-	
+
 	if len(content) == 0 {
 		return nil, fmt.Errorf("empty content provided")
 	}
@@ -203,7 +203,7 @@ func (h *HTMLContentExtractor) ExtractContent(content []byte, contentType string
 		mainContent, method := h.ExtractMainContent(doc)
 		extractedContent.MainContent = mainContent
 		extractedContent.ExtractionMap["main_content_method"] = method
-		
+
 		// Extract clean text from main content
 		extractedContent.CleanText = h.CleanTextContent(mainContent)
 	} else {
@@ -360,19 +360,19 @@ func (h *HTMLContentExtractor) ExtractMainContent(doc *goquery.Document) (string
 func (h *HTMLContentExtractor) ExtractAllText(doc *goquery.Document) string {
 	// Remove script and style elements
 	doc.Find("script, style, noscript").Remove()
-	
+
 	// Remove boilerplate content if configured
 	if h.Config.RemoveBoilerplate {
 		h.RemoveBoilerplateContent(doc)
 	}
-	
+
 	return doc.Find("body").Text()
 }
 
 // RemoveBoilerplateContent removes common boilerplate content from the document
 func (h *HTMLContentExtractor) RemoveBoilerplateContent(doc *goquery.Document) {
 	// Remove common boilerplate selectors
-	boilerplateSelectors := append(h.Config.BoilerplateSelectors, 
+	boilerplateSelectors := append(h.Config.BoilerplateSelectors,
 		"nav", "header", "footer", ".nav", ".navigation", ".menu",
 		".sidebar", ".ads", ".advertisement", ".social", ".share",
 		".comments", ".related", ".recommended", ".popup", ".modal",
@@ -405,7 +405,7 @@ func (h *HTMLContentExtractor) CleanTextContent(text string) string {
 		// Replace multiple whitespace characters with single spaces
 		whitespaceRegex := regexp.MustCompile(`\s+`)
 		text = whitespaceRegex.ReplaceAllString(text, " ")
-		
+
 		// Remove leading/trailing whitespace
 		text = strings.TrimSpace(text)
 	}
@@ -421,21 +421,21 @@ func (h *HTMLContentExtractor) CleanTextContent(text string) string {
 // ScoreContentByLength scores content based on length (simple heuristic)
 func (h *HTMLContentExtractor) ScoreContentByLength(content string) float64 {
 	length := len(strings.TrimSpace(content))
-	
+
 	// Penalize very short or very long content
 	if length < h.Config.MinTextLength {
 		return 0.0
 	}
-	
+
 	if h.Config.MaxTextLength > 0 && length > h.Config.MaxTextLength {
 		return float64(length) * 0.5 // Penalize but don't eliminate
 	}
-	
+
 	// Optimal length range gets highest score
 	if length >= 500 && length <= 5000 {
 		return float64(length) * 2.0
 	}
-	
+
 	return float64(length)
 }
 

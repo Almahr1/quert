@@ -18,6 +18,10 @@ crawler:
     - "test.com"
   blocked_domains:
     - "spam.com"
+  global_rate_limit: 10.0
+  global_burst: 15
+  per_host_rate_limit: 5.0
+  per_host_burst: 10
 
 rate_limit:
   requests_per_second: 1.5
@@ -68,6 +72,7 @@ monitoring:
   enable_profiling: false
   profiling_port: 6061
   tracing_enabled: false
+  jaeger_endpoint: "http://localhost:14268/api/traces"
   service_name: "test-crawler"
   tracing_sample_rate: 0.1
 
@@ -115,6 +120,11 @@ security:
   tls_min_version: "1.2"
   auth_enabled: false
   auth_type: "basic"
+  auth_username: ""
+  auth_password: ""
+  auth_token: ""
+  allowed_ips: []
+  blocked_ips: []
 
 features:
   javascript_rendering: false

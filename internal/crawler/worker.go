@@ -79,9 +79,9 @@ type CrawlerEngine struct {
 	StatsMutex  sync.RWMutex
 
 	// HTTP and external dependencies
-	HTTPClient        *client.HTTPClient
-	RobotsParser      *robots.Parser
-	ExtractorFactory  *extractor.ExtractorFactory
+	HTTPClient       *client.HTTPClient
+	RobotsParser     *robots.Parser
+	ExtractorFactory *extractor.ExtractorFactory
 
 	// Rate limiting
 	GlobalLimiter *rate.Limiter
@@ -833,7 +833,7 @@ func (CrawlerEngine *CrawlerEngine) ProcessJob(Context context.Context, Job *Cra
 		CrawlerEngine.Logger.Warn("content extraction failed, continuing without extracted content",
 			zap.String("url", Job.URL),
 			zap.Error(ExtractionErr))
-		
+
 		// Continue without extracted content rather than failing the entire job
 		Result.Links = []string{}
 		Result.ExtractedText = ""
@@ -842,7 +842,7 @@ func (CrawlerEngine *CrawlerEngine) ProcessJob(Context context.Context, Job *Cra
 		// Populate result with extracted content
 		Result.ExtractedContent = ExtractedContent
 		Result.ExtractedText = ExtractedContent.CleanText
-		
+
 		// Convert ExtractedLink slice to string slice for backward compatibility
 		ExtractedLinks := make([]string, len(ExtractedContent.Links))
 		for i, link := range ExtractedContent.Links {
@@ -1086,7 +1086,6 @@ func (CrawlerEngine *CrawlerEngine) IsRetryableHTTPStatus(StatusCode int) bool {
 	// Use the HTTP client's retry logic
 	return client.IsRetryableStatus(StatusCode, CrawlerEngine.HTTPClient.RetryConfig.RetryableStatus)
 }
-
 
 // cleanupRateLimiters removes unused rate limiters to prevent memory leaks
 func (CrawlerEngine *CrawlerEngine) cleanupRateLimiters(Context context.Context) {

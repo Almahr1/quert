@@ -99,7 +99,7 @@ func main() {
 // processResults processes crawl results and demonstrates content extraction features
 func processResults(engine *crawler.CrawlerEngine, logger *zap.Logger) {
 	results := engine.GetResults()
-	
+
 	for result := range results {
 		if result == nil {
 			continue
@@ -107,7 +107,7 @@ func processResults(engine *crawler.CrawlerEngine, logger *zap.Logger) {
 
 		if result.Success && result.ExtractedContent != nil {
 			content := result.ExtractedContent
-			
+
 			logger.Info("Successfully extracted content",
 				zap.String("url", result.URL),
 				zap.String("title", content.Title),
@@ -120,11 +120,11 @@ func processResults(engine *crawler.CrawlerEngine, logger *zap.Logger) {
 
 			// Print first 200 characters of clean text
 			if len(content.CleanText) > 200 {
-				logger.Info("Content preview", 
+				logger.Info("Content preview",
 					zap.String("url", result.URL),
 					zap.String("preview", content.CleanText[:200]+"..."))
 			} else {
-				logger.Info("Content preview", 
+				logger.Info("Content preview",
 					zap.String("url", result.URL),
 					zap.String("preview", content.CleanText))
 			}

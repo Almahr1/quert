@@ -15,8 +15,8 @@ func (p *PlainTextExtractor) ExtractContent(content []byte, contentType string, 
 		Title:         p.ExtractTitleFromText(cleanText),
 		MainContent:   cleanText,
 		CleanText:     cleanText,
-		Links:         []ExtractedLink{},      // No links in plain text
-		Images:        []ExtractedImage{},     // No images in plain text
+		Links:         []ExtractedLink{},  // No links in plain text
+		Images:        []ExtractedImage{}, // No images in plain text
 		Metadata:      p.CreatePlainTextMetadata(cleanText),
 		QualityScore:  p.CalculateQualityScore(&ExtractedContent{CleanText: cleanText}),
 		ProcessedAt:   time.Now(),
@@ -64,12 +64,12 @@ func (p *PlainTextExtractor) ExtractTitleFromText(text string) string {
 			// Check if it looks like a title (not too many special chars)
 			specialCharCount := 0
 			for _, char := range line {
-				if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
-					 (char >= '0' && char <= '9') || char == ' ' || char == '-' || char == ':') {
+				if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+					(char >= '0' && char <= '9') || char == ' ' || char == '-' || char == ':') {
 					specialCharCount++
 				}
 			}
-			
+
 			// If less than 10% special characters, consider it a potential title
 			if float64(specialCharCount)/float64(len(line)) < 0.1 {
 				return line
@@ -98,7 +98,7 @@ func (p *PlainTextExtractor) CleanTextContent(text string) string {
 		// Replace multiple whitespace characters with single spaces
 		whitespaceRegex := regexp.MustCompile(`\s+`)
 		cleaned = whitespaceRegex.ReplaceAllString(cleaned, " ")
-		
+
 		// Remove leading/trailing whitespace
 		cleaned = strings.TrimSpace(cleaned)
 	}
@@ -161,7 +161,7 @@ func (p *PlainTextExtractor) ExtractKeywordsFromText(text string) []string {
 	// Simple keyword extraction: find words that appear multiple times
 	words := strings.Fields(strings.ToLower(text))
 	wordCount := make(map[string]int)
-	
+
 	for _, word := range words {
 		// Clean word of punctuation
 		cleaned := regexp.MustCompile(`[^\w]`).ReplaceAllString(word, "")
@@ -216,7 +216,7 @@ func (p *PlainTextExtractor) CountParagraphs(text string) int {
 	// Count paragraphs separated by double newlines
 	paragraphs := strings.Split(text, "\n\n")
 	nonEmptyParagraphs := 0
-	
+
 	for _, paragraph := range paragraphs {
 		if strings.TrimSpace(paragraph) != "" {
 			nonEmptyParagraphs++
@@ -257,7 +257,7 @@ func (p *PlainTextExtractor) CalculateQualityScore(extractedContent *ExtractedCo
 	// Structure score (0-20 points)
 	sentenceCount := p.CountSentences(extractedContent.CleanText)
 	paragraphCount := p.CountParagraphs(extractedContent.CleanText)
-	
+
 	if sentenceCount > 3 {
 		score += 10.0
 	}

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/Almahr1/quert/internal/frontier"
+	"github.com/PuerkitoBio/goquery"
 	"go.uber.org/zap"
 )
 
@@ -208,7 +208,7 @@ func (h *HTMLContentExtractor) ResolveURLUsingFrontier(href, baseURL string) str
 		if err != nil {
 			return ""
 		}
-		
+
 		if strings.HasPrefix(baseURL, "https://") {
 			resolvedURL = "https://" + baseHost + href
 		} else {
@@ -222,7 +222,7 @@ func (h *HTMLContentExtractor) ResolveURLUsingFrontier(href, baseURL string) str
 			if err != nil {
 				return ""
 			}
-			
+
 			if strings.HasPrefix(baseURL, "https://") {
 				resolvedURL = "https://" + baseHost + "/" + href
 			} else {
@@ -282,7 +282,7 @@ func (h *HTMLContentExtractor) ExtractBackgroundImageURL(style, baseURL string) 
 	}
 
 	imageURL := strings.Trim(style[urlStart:urlStart+urlEnd], `"' `)
-	
+
 	// Resolve using existing frontier logic
 	return h.ResolveURLUsingFrontier(imageURL, baseURL)
 }

@@ -87,7 +87,7 @@ func (x *XMLContentExtractor) ExtractTextFromXML(xmlContent string) string {
 	// Remove XML tags using regex
 	tagRegex := regexp.MustCompile(`<[^>]*>`)
 	text := tagRegex.ReplaceAllString(xmlContent, " ")
-	
+
 	return text
 }
 
@@ -95,7 +95,7 @@ func (x *XMLContentExtractor) ExtractTextFromXML(xmlContent string) string {
 func (x *XMLContentExtractor) ExtractTitleFromXML(doc *goquery.Document) string {
 	// Try common XML title elements
 	titleSelectors := []string{"title", "name", "heading", "header", "subject"}
-	
+
 	for _, selector := range titleSelectors {
 		title := doc.Find(selector).First().Text()
 		if title != "" {
@@ -152,7 +152,7 @@ func (x *XMLContentExtractor) CleanXMLText(text string) string {
 		// Replace multiple whitespace characters with single spaces
 		whitespaceRegex := regexp.MustCompile(`\s+`)
 		cleaned = whitespaceRegex.ReplaceAllString(cleaned, " ")
-		
+
 		// Remove leading/trailing whitespace
 		cleaned = strings.TrimSpace(cleaned)
 	}
@@ -172,7 +172,7 @@ func (x *XMLContentExtractor) ExtractLinksFromXML(doc *goquery.Document, baseURL
 
 	// Look for common link attributes in XML
 	linkAttributes := []string{"href", "url", "link", "src"}
-	
+
 	for _, attr := range linkAttributes {
 		doc.Find("*[" + attr + "]").Each(func(i int, s *goquery.Selection) {
 			if linkURL, exists := s.Attr(attr); exists && linkURL != "" {
@@ -180,7 +180,7 @@ func (x *XMLContentExtractor) ExtractLinksFromXML(doc *goquery.Document, baseURL
 				if strings.HasPrefix(linkURL, "http://") || strings.HasPrefix(linkURL, "https://") {
 					if !seenLinks[linkURL] {
 						seenLinks[linkURL] = true
-						
+
 						text := strings.TrimSpace(s.Text())
 						if text == "" {
 							text = linkURL
@@ -227,7 +227,7 @@ func (x *XMLContentExtractor) CreateXMLMetadata(text string) ContentMetadata {
 // CreateXMLMetadataFromDoc creates metadata from parsed XML document
 func (x *XMLContentExtractor) CreateXMLMetadataFromDoc(doc *goquery.Document, text string) ContentMetadata {
 	metadata := x.CreateXMLMetadata(text)
-	
+
 	// Try to extract author from common XML elements
 	authorSelectors := []string{"author", "creator", "by", "writer"}
 	for _, selector := range authorSelectors {
@@ -287,7 +287,7 @@ func (x *XMLContentExtractor) ExtractKeywordsFromText(text string) []string {
 	// Simple keyword extraction
 	words := strings.Fields(strings.ToLower(text))
 	wordCount := make(map[string]int)
-	
+
 	for _, word := range words {
 		cleaned := regexp.MustCompile(`[^\w]`).ReplaceAllString(word, "")
 		if len(cleaned) > 3 {
@@ -339,7 +339,7 @@ func (x *XMLContentExtractor) CountParagraphs(text string) int {
 
 	paragraphs := strings.Split(text, "\n\n")
 	nonEmptyParagraphs := 0
-	
+
 	for _, paragraph := range paragraphs {
 		if strings.TrimSpace(paragraph) != "" {
 			nonEmptyParagraphs++
@@ -380,7 +380,7 @@ func (x *XMLContentExtractor) CalculateQualityScore(extractedContent *ExtractedC
 	// Structure score (0-25 points)
 	sentenceCount := x.CountSentences(extractedContent.CleanText)
 	paragraphCount := x.CountParagraphs(extractedContent.CleanText)
-	
+
 	if sentenceCount > 2 {
 		score += 12.5
 	}

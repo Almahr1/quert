@@ -57,7 +57,7 @@ func TestHTMLContentExtractor_ExtractContent(t *testing.T) {
 	// Test main content extraction
 	assert.Contains(t, content.MainContent, "Main Article Title")
 	assert.Contains(t, content.MainContent, "main content of the article")
-	assert.NotContains(t, content.MainContent, "Navigation") // Should be removed as boilerplate
+	assert.NotContains(t, content.MainContent, "Navigation")    // Should be removed as boilerplate
 	assert.NotContains(t, content.MainContent, "Advertisement") // Should be removed as boilerplate
 
 	// Test clean text
@@ -67,7 +67,7 @@ func TestHTMLContentExtractor_ExtractContent(t *testing.T) {
 
 	// Test links extraction
 	assert.Len(t, content.Links, 2)
-	
+
 	// Find links
 	var externalLink, internalLink *ExtractedLink
 	for i := range content.Links {
@@ -78,7 +78,7 @@ func TestHTMLContentExtractor_ExtractContent(t *testing.T) {
 			internalLink = &content.Links[i]
 		}
 	}
-	
+
 	require.NotNil(t, externalLink)
 	require.NotNil(t, internalLink)
 	assert.False(t, externalLink.Internal)
@@ -181,8 +181,8 @@ func TestExtractorFactory_CreateExtractor(t *testing.T) {
 	defer factory.Close()
 
 	tests := []struct {
-		contentType     string
-		expectedType    string
+		contentType  string
+		expectedType string
 	}{
 		{"text/html", "*extractor.HTMLContentExtractor"},
 		{"text/html; charset=utf-8", "*extractor.HTMLContentExtractor"},
@@ -198,10 +198,10 @@ func TestExtractorFactory_CreateExtractor(t *testing.T) {
 		t.Run(tt.contentType, func(t *testing.T) {
 			extractor := factory.CreateExtractor(tt.contentType)
 			assert.NotNil(t, extractor)
-			
+
 			// Check that it implements the ContentExtractor interface
 			assert.Implements(t, (*ContentExtractor)(nil), extractor)
-			
+
 			extractor.Close()
 		})
 	}

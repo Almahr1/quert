@@ -79,7 +79,7 @@ func (f *ExtractorFactory) ExtractContent(content []byte, contentType string, so
 			zap.Float64("quality_score", extractedContent.QualityScore),
 			zap.Float64("threshold", f.Config.QualityThreshold),
 			zap.String("source_url", sourceURL))
-		return nil, fmt.Errorf("content quality score %.2f below threshold %.2f", 
+		return nil, fmt.Errorf("content quality score %.2f below threshold %.2f",
 			extractedContent.QualityScore, f.Config.QualityThreshold)
 	}
 
@@ -161,7 +161,7 @@ func (f *ExtractorFactory) BatchExtractContent(requests []ContentExtractionReque
 func (f *ExtractorFactory) extractionWorker(jobs <-chan ContentExtractionRequest, results chan<- ContentExtractionResult) {
 	for request := range jobs {
 		extractedContent, err := f.ExtractContent(request.Content, request.ContentType, request.SourceURL)
-		
+
 		result := ContentExtractionResult{
 			Request:          request,
 			ExtractedContent: extractedContent,
@@ -204,13 +204,13 @@ func (f *ExtractorFactory) GetSupportedContentTypes() []string {
 func (f *ExtractorFactory) IsContentTypeSupported(contentType string) bool {
 	supportedTypes := f.GetSupportedContentTypes()
 	contentTypeLower := strings.ToLower(contentType)
-	
+
 	for _, supportedType := range supportedTypes {
 		if strings.Contains(contentTypeLower, supportedType) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

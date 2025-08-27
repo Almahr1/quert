@@ -16,18 +16,18 @@ import (
 
 // Config represents the complete application configuration
 type Config struct {
-	Crawler CrawlerConfig `mapstructure:"crawler" yaml:"crawler" json:"crawler"`
-	RateLimit RateLimitConfig `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
-	Content ContentConfig `mapstructure:"content" yaml:"content" json:"content"`
-	Storage StorageConfig `mapstructure:"storage" yaml:"storage" json:"storage"`
-	Monitoring MonitoringConfig `mapstructure:"monitoring" yaml:"monitoring" json:"monitoring"`
-	HTTP HTTPConfig `mapstructure:"http" yaml:"http" json:"http"`
-	Frontier FrontierConfig `mapstructure:"frontier" yaml:"frontier" json:"frontier"`
-	Robots RobotsConfig `mapstructure:"robots" yaml:"robots" json:"robots"`
-	Redis RedisConfig `mapstructure:"redis" yaml:"redis" json:"redis"`
-	Security SecurityConfig `mapstructure:"security" yaml:"security" json:"security"`
-	Features FeatureConfig `mapstructure:"features" yaml:"features" json:"features"`
-	ConfigFileUsed string `json:"-" yaml:"-"`
+	Crawler        CrawlerConfig    `mapstructure:"crawler" yaml:"crawler" json:"crawler"`
+	RateLimit      RateLimitConfig  `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
+	Content        ContentConfig    `mapstructure:"content" yaml:"content" json:"content"`
+	Storage        StorageConfig    `mapstructure:"storage" yaml:"storage" json:"storage"`
+	Monitoring     MonitoringConfig `mapstructure:"monitoring" yaml:"monitoring" json:"monitoring"`
+	HTTP           HTTPConfig       `mapstructure:"http" yaml:"http" json:"http"`
+	Frontier       FrontierConfig   `mapstructure:"frontier" yaml:"frontier" json:"frontier"`
+	Robots         RobotsConfig     `mapstructure:"robots" yaml:"robots" json:"robots"`
+	Redis          RedisConfig      `mapstructure:"redis" yaml:"redis" json:"redis"`
+	Security       SecurityConfig   `mapstructure:"security" yaml:"security" json:"security"`
+	Features       FeatureConfig    `mapstructure:"features" yaml:"features" json:"features"`
+	ConfigFileUsed string           `json:"-" yaml:"-"`
 }
 
 // CrawlerConfig holds basic crawler settings
