@@ -25,9 +25,9 @@ func main() {
 	defer logger.Sync()
 
 	crawlerConfig := &config.CrawlerConfig{
-		MaxPages:          10000,
+		MaxPages:          1000,
 		MaxDepth:          1,
-		ConcurrentWorkers: 50,
+		ConcurrentWorkers: 100,
 		RequestTimeout:    30 * time.Second,
 		UserAgent:         "Quert-LinkCollector/1.0 (+https://github.com/Almahr1/quert) Educational Use",
 		GlobalRateLimit:   10.0,
@@ -95,7 +95,6 @@ func main() {
 			"https://en.wikipedia.org/wiki/Web_development",
 			"https://en.wikipedia.org/wiki/Machine_learning",
 			"https://en.wikipedia.org/wiki/Artificial_intelligence",
-			"https://en.wikipedia.org/wiki/Minecraft",
 
 			"https://npmjs.com",
 			"https://pypi.org",
@@ -112,10 +111,6 @@ func main() {
 		IncludePatterns: []string{
 			".*\\.(html|htm|php|asp|aspx)$",
 			".*/$",
-			".*/index.*",     // Index pages often have many links
-			".*/links.*",     // Link collection pages
-			".*/directory.*", // Directory pages
-			".*/sitemap.*",   // Sitemap pages
 		},
 		ExcludePatterns: []string{
 			".*\\.(jpg|jpeg|png|gif|svg|ico|css|js|pdf|doc|docx|zip|exe)$",
@@ -127,7 +122,7 @@ func main() {
 	}
 
 	httpConfig := &config.HTTPConfig{
-		MaxIdleConnections:        100,
+		MaxIdleConnections:        50,
 		MaxIdleConnectionsPerHost: 10,
 		IdleConnectionTimeout:     30 * time.Second,
 		DisableKeepAlives:         false,
@@ -152,11 +147,6 @@ func main() {
 	var linkMutex sync.RWMutex
 	var processedPages int32
 
-	// Domain job tracking for #6 (domain job limits)
-	var domainJobCount = make(map[string]int)
-	var domainMutex sync.RWMutex
-	const maxJobsPerDomain = 15 // Limit jobs per domain to prevent getting stuck
-
 	outputFile := "collected_links.txt"
 	file, err := os.Create(outputFile)
 	if err != nil {
@@ -169,10 +159,10 @@ func main() {
 
 	logger.Info("Starting link collection crawler",
 		zap.String("output_file", outputFile),
-		zap.Int("target_links", 500000),
+		zap.Int("target_links", 5000),
 		zap.Int("max_pages", crawlerConfig.MaxPages))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	if err := engine.Start(ctx); err != nil {
@@ -220,100 +210,31 @@ func main() {
 					zap.Int("unique_links", currentLinkCount),
 					zap.String("from_page", result.URL))
 
-				// #4: Aggressive External Link Prioritization
+				// Only crawl external URLs (different domains) to avoid getting stuck on one site
 				sourceHost, _ := frontier.ExtractHostFromURL(result.URL)
-
-				// Separate external and internal links
-				externalLinks := []string{}
-				internalLinks := []string{}
-
+				externalLinksAdded := 0
 				for _, link := range content.Links {
 					if isValidCrawlTarget(link.URL, crawlerConfig.ExcludePatterns) {
 						linkHost, _ := frontier.ExtractHostFromURL(link.URL)
+						// Only add links from different domains to encourage diversity
 						if linkHost != sourceHost && linkHost != "" {
-							externalLinks = append(externalLinks, link.URL)
-						} else if linkHost == sourceHost {
-							internalLinks = append(internalLinks, link.URL)
+							job := &crawler.CrawlJob{
+								URL:       link.URL,
+								Priority:  2, // Lower priority for discovered links
+								Depth:     result.Job.Depth + 1,
+								RequestID: fmt.Sprintf("external-%d", time.Now().UnixNano()),
+								Context:   ctx,
+							}
+							engine.SubmitJob(job)
+							externalLinksAdded++
+
+							// Limit external links per page to avoid queue flooding
+							if externalLinksAdded >= 5 {
+								break
+							}
 						}
 					}
 				}
-
-				logger.Info("Link analysis",
-					zap.String("source_domain", sourceHost),
-					zap.Int("external_links", len(externalLinks)),
-					zap.Int("internal_links", len(internalLinks)))
-
-				// Submit ALL external links immediately with high priority
-				externalSubmitted := 0
-				for _, linkURL := range externalLinks {
-					linkHost, _ := frontier.ExtractHostFromURL(linkURL)
-
-					// #6: Check domain job limits
-					domainMutex.RLock()
-					currentDomainJobs := domainJobCount[linkHost]
-					domainMutex.RUnlock()
-
-					if currentDomainJobs < maxJobsPerDomain {
-						job := &crawler.CrawlJob{
-							URL:       linkURL,
-							Priority:  1, // High priority for external links
-							Depth:     0, // Reset depth for new domains
-							RequestID: fmt.Sprintf("external-%d", time.Now().UnixNano()),
-							Context:   ctx,
-						}
-
-						if err := engine.SubmitJob(job); err == nil {
-							// Update domain job count
-							domainMutex.Lock()
-							domainJobCount[linkHost]++
-							domainMutex.Unlock()
-
-							externalSubmitted++
-						}
-					} else {
-						logger.Debug("Skipping domain due to job limit",
-							zap.String("domain", linkHost),
-							zap.Int("current_jobs", currentDomainJobs),
-							zap.Int("max_jobs", maxJobsPerDomain))
-					}
-				}
-
-				// Submit limited internal links with lower priority
-				internalSubmitted := 0
-				maxInternal := 2 // Strict limit on internal links
-				for i, linkURL := range internalLinks {
-					if i >= maxInternal {
-						break
-					}
-
-					domainMutex.RLock()
-					currentDomainJobs := domainJobCount[sourceHost]
-					domainMutex.RUnlock()
-
-					if currentDomainJobs < maxJobsPerDomain {
-						job := &crawler.CrawlJob{
-							URL:       linkURL,
-							Priority:  5, // Lower priority for internal links
-							Depth:     result.Job.Depth + 1,
-							RequestID: fmt.Sprintf("internal-%d", time.Now().UnixNano()),
-							Context:   ctx,
-						}
-
-						if err := engine.SubmitJob(job); err == nil {
-							domainMutex.Lock()
-							domainJobCount[sourceHost]++
-							domainMutex.Unlock()
-
-							internalSubmitted++
-						}
-					}
-				}
-
-				logger.Info("Jobs submitted",
-					zap.Int("external_submitted", externalSubmitted),
-					zap.Int("internal_submitted", internalSubmitted),
-					zap.Int("external_total", len(externalLinks)),
-					zap.Int("internal_total", len(internalLinks)))
 
 				// Check if we've reached our target
 				if currentLinkCount >= 5000 {
