@@ -1,4 +1,3 @@
-// Package main demonstrates a comprehensive web crawler example using Quert's public API.
 // This example showcases:
 // - Complete crawler setup with configuration
 // - Content extraction and quality assessment
