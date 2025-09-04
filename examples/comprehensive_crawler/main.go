@@ -104,7 +104,7 @@ func (d *CrawlerDemo) setupComponents() error {
 	crawlerConfig := &config.CrawlerConfig{
 		MaxPages:          100,
 		MaxDepth:          1,
-		ConcurrentWorkers: 50,
+		ConcurrentWorkers: 100,
 		RequestTimeout:    30 * time.Second,
 		UserAgent:         "Quert-ComprehensiveExample/1.0 (+https://github.com/Almahr1/quert)",
 		SeedURLs: []string{
