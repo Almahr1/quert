@@ -21,7 +21,6 @@ func main() {
 
 	logger.Info("Starting Quert Simple Example")
 
-	// Create basic crawler configuration
 	crawlerConfig := &config.CrawlerConfig{
 		MaxPages:          5,
 		MaxDepth:          1,
@@ -38,7 +37,6 @@ func main() {
 		PerHostBurst:     1,
 	}
 
-	// HTTP client configuration
 	httpConfig := &config.HTTPConfig{
 		MaxIdleConnections:        50,
 		MaxIdleConnectionsPerHost: 5,
@@ -51,20 +49,16 @@ func main() {
 		DisableCompression:        false,
 	}
 
-	// Create crawler engine
 	engine := crawler.NewCrawlerEngine(crawlerConfig, httpConfig, nil, logger)
 
-	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Start crawler
 	logger.Info("Starting crawler engine")
 	if err := engine.Start(ctx); err != nil {
 		logger.Fatal("Failed to start crawler engine", zap.Error(err))
 	}
 
-	// Process results in background
 	go processResults(engine, logger)
 
 	// Submit crawl jobs
@@ -88,7 +82,6 @@ func main() {
 	// Wait for crawling to complete
 	time.Sleep(30 * time.Second)
 
-	// Stop crawler
 	logger.Info("Stopping crawler engine")
 	if err := engine.Stop(); err != nil {
 		logger.Error("Error stopping crawler", zap.Error(err))
@@ -107,7 +100,6 @@ func main() {
 	logger.Info("Simple crawler example completed")
 }
 
-// processResults handles crawl results
 func processResults(engine *crawler.CrawlerEngine, logger *zap.Logger) {
 	results := engine.GetResults()
 
@@ -123,7 +115,6 @@ func processResults(engine *crawler.CrawlerEngine, logger *zap.Logger) {
 				zap.Duration("response_time", result.ResponseTime),
 				zap.Int("content_length", len(result.Body)))
 
-			// Print content preview if available
 			if result.ExtractedContent != nil {
 				content := result.ExtractedContent
 				logger.Info("Extracted content",

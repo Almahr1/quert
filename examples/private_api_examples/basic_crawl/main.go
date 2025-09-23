@@ -133,7 +133,7 @@ func processResults(engine *crawler.CrawlerEngine, logger *zap.Logger) {
 			if len(content.Links) > 0 {
 				logger.Info("Extracted links", zap.String("url", result.URL))
 				for i, link := range content.Links {
-					if i >= 5 { // Limit to first 5 links
+					if i >= 5 {
 						logger.Info(fmt.Sprintf("... and %d more links", len(content.Links)-5))
 						break
 					}
