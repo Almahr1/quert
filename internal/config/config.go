@@ -1,5 +1,11 @@
 // Package config provides comprehensive configuration management for the web crawler
 // Supports multiple configuration sources: YAML, JSON, environment variables, and command line flags
+
+// TODO: Remove BindEnvVariables, and its call in LoadConfig
+// currently it works because manual binding likely is taking precedence.
+// but this is very confusing, and is just bad practice.
+// will fix after math midterm (REMIND ME!!!)
+
 package config
 
 import (

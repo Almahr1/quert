@@ -14,7 +14,7 @@ Keep it friendly:
 
 ### What You'll Need
 
-- Go 1.21+ (or close enough)
+- Go 1.23.0+
 - Git
 - That's pretty much it!
 
@@ -65,7 +65,7 @@ git checkout -b your-feature-name
 ```bash
 go fmt ./...      # Format all Go files in project
 go build ./...    # Build all packages in project
-go test ./...     # Test all packages in project. Use -v to see all individual testsz 
+go test ./...     # Test all packages in project. Use -v to see all individual testsz
 ```
 
 4. Commit and push:
@@ -93,7 +93,7 @@ Don't stress about the format too much.
 
 Write clear Go code:
 - Use descriptive names
-- Handle errors properly  
+- Handle errors properly
 - Keep functions reasonably short
 - Add comments for tricky parts
 
