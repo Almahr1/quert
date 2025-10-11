@@ -66,6 +66,7 @@ crawl_stats_*.txt
 content_samples_*.txt
 harvested_links_*.txt
 ROADMAP.md
+ISSUES.md
 
 # Temporary and cache files
 profiles/

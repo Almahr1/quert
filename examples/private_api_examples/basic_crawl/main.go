@@ -44,7 +44,7 @@ func main() {
 
 	engine := crawler.NewCrawlerEngine(crawlerConfig, httpConfig, nil, logger)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	logger.Info("Starting crawler engine")
@@ -52,10 +52,8 @@ func main() {
 		logger.Fatal("Failed to start crawler engine", zap.Error(err))
 	}
 
-	// Process results in a separate goroutine
 	go processResults(engine, logger)
 
-	// Submit some crawl jobs
 	for _, url := range crawlerConfig.SeedURLs {
 		job := &crawler.CrawlJob{
 			URL:         url,
@@ -64,7 +62,7 @@ func main() {
 			Headers:     map[string]string{},
 			RequestID:   fmt.Sprintf("job-%d", time.Now().UnixNano()),
 			SubmittedAt: time.Now(),
-			Context:     ctx,
+			Context:     ctx, // Use the main context for jobs
 		}
 
 		logger.Info("Submitting crawl job", zap.String("url", url))
@@ -73,11 +71,10 @@ func main() {
 		}
 	}
 
-	// Wait for a bit to let jobs process
-	time.Sleep(30 * time.Second)
+	logger.Info("Crawler is running. Waiting for context to complete...")
+	<-ctx.Done()
+	logger.Info("Context finished. Shutting down.")
 
-	// Stop the crawler
-	logger.Info("Stopping crawler engine")
 	if err := engine.Stop(); err != nil {
 		logger.Error("Error stopping crawler", zap.Error(err))
 	}
@@ -89,6 +86,7 @@ func main() {
 			zap.Int64("total_jobs", metrics.TotalJobs),
 			zap.Int64("successful_jobs", metrics.SuccessfulJobs),
 			zap.Int64("failed_jobs", metrics.FailedJobs),
+			zap.Int64("timed_out_jobs", metrics.TimedOutJobs),
 			zap.Float64("jobs_per_second", metrics.JobsPerSecond),
 			zap.Duration("uptime", metrics.Uptime))
 	}

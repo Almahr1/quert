@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Almahr1/quert/internal/config"
@@ -257,9 +260,7 @@ func (e *ExponentialBackoff) NextDelay(attempt int) time.Duration {
 	}
 
 	result := time.Duration(delay)
-	if result > e.MaxDelay {
-		result = e.MaxDelay
-	}
+	result = min(result, e.MaxDelay)
 
 	return result
 }
@@ -271,9 +272,7 @@ func (l *LinearBackoff) NextDelay(attempt int) time.Duration {
 
 	delay := time.Duration(attempt) * l.BaseDelay
 
-	if delay > l.MaxDelay {
-		delay = l.MaxDelay
-	}
+	delay = min(delay, l.MaxDelay)
 
 	return delay
 }
@@ -386,49 +385,34 @@ func IsRetryableError(err error, retryableErrors []error) bool {
 	}
 
 	// Check against explicitly configured retryable errors
-	for _, retryableErr := range retryableErrors {
-		if err == retryableErr {
-			return true
-		}
-	}
-
-	// Check for common network errors that should trigger retry
-	errorStr := err.Error()
-
-	// Network timeout errors
-	if strings.Contains(errorStr, "timeout") {
+	if slices.Contains(retryableErrors, err) {
 		return true
 	}
 
-	// DNS errors (temporary)
-	if strings.Contains(errorStr, "no such host") {
+	// Check for common sentinel errors
+	if errors.Is(err, context.Canceled) ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
 
-	// Connection refused (server might be temporarily down)
-	if strings.Contains(errorStr, "connection refused") {
+	// Checking for "timeout" errors
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
 		return true
 	}
 
-	// Connection reset by peer
-	if strings.Contains(errorStr, "connection reset by peer") {
-		return true
-	}
-
-	// EOF errors (connection closed unexpectedly)
-	if strings.Contains(errorStr, "EOF") {
-		return true
-	}
-
-	// Context canceled or deadline exceeded (from timeouts)
-	if strings.Contains(errorStr, "context canceled") || strings.Contains(errorStr, "deadline exceeded") {
+	// Looking for "no such host" errors (dnsErr.Temporary() is false)
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.Temporary() {
 		return true
 	}
 
 	return false
 }
 
-// Pre-built map of default retryable status codes for efficiency
 var defaultRetryableStatusCodes = map[int]struct{}{
 	429: {}, // Too Many Requests
 	500: {}, // Internal Server Error

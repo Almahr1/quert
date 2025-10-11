@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,24 +57,24 @@ func TestCrawlerWithLocalServer(t *testing.T) {
 
 	logger, _ := zap.NewDevelopment()
 
-	// Create crawler engine
 	engine := NewCrawlerEngine(crawlerConfig, httpConfig, robotsConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Start the engine
 	if err := engine.Start(ctx); err != nil {
 		t.Fatalf("Failed to start crawler engine: %v", err)
 	}
 	defer engine.Stop()
 
-	// Channel to collect results
 	results := make([]*CrawlResult, 0)
-	resultsDone := make(chan bool)
+	var wg sync.WaitGroup
+	//resultsDone := make(chan bool)
 
 	// Start result collection goroutine
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for result := range engine.GetResults() {
 			results = append(results, result)
 			t.Logf("Crawled: %s - Status: %d - Success: %t - Text Length: %d - Links: %d",
@@ -87,8 +88,8 @@ func TestCrawlerWithLocalServer(t *testing.T) {
 				t.Logf("  Error: %v", result.Error)
 			}
 		}
-		resultsDone <- true
 	}()
+	wg.Wait()
 
 	// Submit crawl jobs
 	for _, seedURL := range crawlerConfig.SeedURLs {
@@ -109,19 +110,11 @@ func TestCrawlerWithLocalServer(t *testing.T) {
 	}
 
 	// Wait for a bit to allow crawling
+	// Not an ideal solution
 	time.Sleep(5 * time.Second)
 
-	// Stop the engine and wait for results processing to complete
 	if err := engine.Stop(); err != nil {
 		t.Errorf("Error stopping engine: %v", err)
-	}
-
-	// Wait for result collection to complete
-	select {
-	case <-resultsDone:
-		t.Logf("Result collection completed")
-	case <-time.After(5 * time.Second):
-		t.Log("Timeout waiting for result collection to complete")
 	}
 
 	// Print final metrics
@@ -265,12 +258,4 @@ func isServerRunning(url string) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode < 500 // Accept any non-server-error status
-}
-
-// Helper function for min
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

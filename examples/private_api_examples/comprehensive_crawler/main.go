@@ -106,6 +106,7 @@ func (d *CrawlerDemo) setupComponents() error {
 			"https://example.com",
 			"https://httpbin.org/json",
 			"https://httpbin.org/xml",
+			"https://reddit.com/r/gaming", // Throw in some spice
 		},
 		IncludePatterns:  []string{".*"},
 		ExcludePatterns:  []string{"\\.pdf$", "\\.jpg$", "\\.png$"},
@@ -399,6 +400,7 @@ func (d *CrawlerDemo) metricsCallback(metrics *crawler.CrawlerMetrics) {
 		zap.Int64("total_jobs", metrics.TotalJobs),
 		zap.Int64("successful_jobs", metrics.SuccessfulJobs),
 		zap.Int64("failed_jobs", metrics.FailedJobs),
+		zap.Int64("timed-out_jobs", metrics.TimedOutJobs),
 		zap.Float64("jobs_per_second", metrics.JobsPerSecond),
 		zap.Duration("average_latency", metrics.AverageLatency),
 		zap.Int("active_workers", metrics.ActiveWorkers),
