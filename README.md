@@ -100,7 +100,7 @@ make quick
 
 ## Implementation Status
 
-The project is currently in developement, I'd estimate around 50% done for now, still working on the actual content extraction which is a major part of the project.
+The project is currently in development, I'd estimate around 50% done for now, still working on the actual content extraction which is a major part of the project.
 
 ## License
 
@@ -124,7 +124,7 @@ Development dependencies:
 This project was built by humans, augmented by AI. I believe in using the best tools for the job:
 
 *   **Human-Led:** The core architecture, design decisions, complex logic, and final implementation were meticulously planned and executed by a human developer.
-*   **AI-Assisted:** To boost productivity, I utilized AI (primarily LLMs) for generating repetitive boilerplate code, comprehensive test cases, and initial drafts of documentation. All AI-generated content was reviewed, tested, and adapted to fit the project's standards. (some room for error, which is reviewwed occasionally)
+*   **AI-Assisted:** To boost productivity, I utilized AI (primarily LLMs) for generating repetitive boilerplate code, comprehensive test cases, and initial drafts of documentation. All AI-generated content was reviewed, tested, and adapted to fit the project's standards. (some room for error, which is reviewed occasionally)
 
 This approach allowed me to focus my creative energy on solving hard problems rather than repetitive tasks.
 
