@@ -1,3 +1,6 @@
+## NOTE:
+* The project is currently undergoing a major refactoring of architecture and documentation, some of the examples may be innacurate to the curent state of the codebase *
+
 # Quert
 
 A (hopefully) performant concurrent web crawler built in Go, designed specifically for collecting text data for LLM training pipelines. Aimed at being ethical and performant, adhering to robots.txt rules, and avoiding super-crazy crawling.
